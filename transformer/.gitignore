@@ -1,0 +1,5 @@
+#Ignore checkpoints of training runs
+checkpoints/
+
+#Ignore wandb files
+wandb/
