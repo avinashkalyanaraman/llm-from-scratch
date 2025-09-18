@@ -21,8 +21,8 @@ import wandb
 import wandb_utils
 
 #How often to checkpoint the model, run-validation and log to wandb!
-CHECKPOINT_RATE = 200
-VALIDATION_RATE = 200
+CHECKPOINT_RATE = 800
+VALIDATION_RATE = 800
 WANDB_LOG_RATE = 50
 ISWANDB = True
 
@@ -243,11 +243,13 @@ if __name__ == '__main__' :
                 if ISWANDB:
                     run.log( {"val_loss" : mean_val_loss}, step = num_steps )
 
+            if (num_steps % WANDB_LOG_RATE) == 0:
+                print (f"Computed loss {computed_loss.item(): 0.3f} at num_step = {num_steps}")
+
             #Log to Wandb
             if ISWANDB and (num_steps % WANDB_LOG_RATE == 0):
                 log_dict = { 'curr_lr' : curr_lr, "training_loss" : computed_loss.item(),
                     "tokens" : tokens_handled}
-                print (f"Computed loss {computed_loss.item(): 0.3f} at num_step = {num_steps}")
                 if isTime:
                     log_dict['steptime'] = elapsed 
                     log_dict['throughput'] = throughput
