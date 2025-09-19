@@ -42,9 +42,11 @@ if __name__ == '__main__' :
     parser.add_argument("--num_layers", type=int, default=1, help="num of layers")
     parser.add_argument("--epochs", type=int, default=1, help="num of epochs")
     parser.add_argument("--vocabsize", type=int, default=50304, help="vocab size of the tokenizer used! Power of 64 helps!")
-    parser.add_argument("--file", type=str, default="temp/temp.npy", help="file with tokens to be used as training")
+    parser.add_argument("--tfile", type=str, default="temp/temp.npy", help="file with tokens to be used as training")
+    parser.add_argument("--vfile", type=str, default="temp/temp.npy", help="file with tokens to be used for validation")
     parser.add_argument("--time", action="store_true", help="enable timing")
-    parser.add_argument("--tokenlimit", type=int, default=100_000, help="total # of training tokens to consider" )
+    parser.add_argument("--tokenlimit", type=int, default=40_000_000, help="total # of training tokens to consider" )
+    parser.add_argument("--val_tokenlimit", type=int, default=10_000_000, help="total # of validation tokens to consider" )
 
     args = parser.parse_args()
 
@@ -59,9 +61,11 @@ if __name__ == '__main__' :
     num_layers = args.num_layers
     epochs = args.epochs
     vocab_size = args.vocabsize
-    fname = args.file
+    t_fname = args.tfile
+    v_fname = args.vfile
     isTime = args.time
     tokenlimit = args.tokenlimit
+    val_tokenlimit = args.val_tokenlimit
 
     #Wandb Config Settings!
     # Start a new wandb run to track this execution.
@@ -89,28 +93,21 @@ if __name__ == '__main__' :
         )
 
 
-    dataset = filehandler.myDataset (args.file,seqlen)
-    N = len(dataset)
-    print (f"The dataset has  {N} entires. It will be split 80%train, 10%valid, 10% test")
+    train_dataset = filehandler.myDataset (t_fname,seqlen)
+    val_dataset = filehandler.myDataset(v_fname, seqlen)
 
-    # Define split sizes
-    train_frac = 0.8
-    val_frac = 0.1
-    test_frac = 0.1
+    print (f"The dataset has  {len(train_dataset)} entires for training")
+    print (f"The dataset has  {len(val_dataset)} entires for validation")
 
     #Checkpoint info
     checkpoint_file = 'checkpoints/step9600.pt'
     final_file = 'checkpoints/final_model.pt'
 
-    train_size = int(train_frac * N)
-    val_size = int(val_frac * N)
-    test_size = N - train_size - val_size  # ensure all samples are included
-
     # Split the dataset
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
-    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=True, drop_last=True)
+    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=False, drop_last=True) #TODO: set shuffle to True for larger mem
     val_dataloader = DataLoader (val_dataset, batch_size=batchsize*2, shuffle=False, drop_last=True)
-    test_dataloader = DataLoader (test_dataset, batch_size=batchsize, shuffle=False, drop_last=True)
+
+    max_val_steps = val_tokenlimit // (val_dataloader.batch_size * seqlen)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -136,7 +133,7 @@ if __name__ == '__main__' :
     opt = optimizer.AdamW ( model.parameters(), lr = lr, betas = (beta1,beta2), eps=1e-8, weight_decay = 1e-2)
     #opt = _optimizer.AdamW (model.parameters(), lr = lr, betas=(beta1,beta2))
 
-    #For cosine annealing:
+    #For cosine annealing: #TODO: Make it f(tokenlimit) as opp to f(train_dataloader)
     tw = 0.05* (epochs* len(train_dataloader))
     tc = epochs*len(train_dataloader)
     alpha_max = lr
@@ -224,6 +221,7 @@ if __name__ == '__main__' :
 
                 model.eval()
                 total_val_loss = torch.zeros ( (), device = device)
+                val_steps = 0
 
                 with torch.no_grad():
                     print (f"handling validation")
@@ -236,7 +234,10 @@ if __name__ == '__main__' :
                         total_val_loss += computed_val_loss
                         if v_batchnum % 100 == 0:
                             print (f"validation batchnum = {v_batchnum}")
-                mean_val_loss = total_val_loss.item()*1./len(val_dataloader)
+                        val_steps += 1
+                        if val_steps >= max_val_steps:
+                            break
+                mean_val_loss = total_val_loss.item()*1./val_steps #TODO: Later profile-&-verify, which is faster. accumulating computed_val_loss as .item() for every batch, or this and suffering kernel launch penalty!
                 print (f"Mean val loss = {mean_val_loss}")
                 model.train() #Go back to training mode!
 
