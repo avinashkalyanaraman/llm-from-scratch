@@ -84,14 +84,21 @@ class myDataset (torch.utils.data.Dataset):
         y_val = self.cache [rel_start + 1 : rel_start + 1 + self.context_len]
 
 
-        return torch.from_numpy(x_val.copy()), torch.from_numpy(y_val.copy())  #DataLoader expects torch.Tensor. This helps!
+        #return torch.from_numpy(x_val.copy()), torch.from_numpy(y_val.copy())  #DataLoader expects torch.Tensor. This helps!
+        return torch.from_numpy(x_val), torch.from_numpy(y_val)
+
+
+
         
         '''
-        #The above .copy() is because 
+        #The above .copy() of the initial implmn is because 
         np.load(..., mmap_mode='r') creates a read-only memory map.
         torch.from_numpy(x_val) creates a tensor that shares memory with the NumPy array.
         PyTorch requires writable memory for tensors because operations like .backward() or in-place updates might try to modify the data.
         Since the underlying array is non-writable, PyTorch emits a warning.
+
+        If we aren't modifying the tensor in the code; we can load mmap as 'r+' , and simply do a torch.from_numpy(x_val). 
+        This saves us some memory!
         '''
 
 
