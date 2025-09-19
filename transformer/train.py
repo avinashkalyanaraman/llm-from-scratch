@@ -21,8 +21,8 @@ import wandb
 import wandb_utils
 
 #How often to checkpoint the model, run-validation and log to wandb!
-CHECKPOINT_RATE = 800
-VALIDATION_RATE = 800
+CHECKPOINT_RATE = 1000
+VALIDATION_RATE = 1000
 WANDB_LOG_RATE = 50
 ISWANDB = True
 
@@ -107,7 +107,7 @@ if __name__ == '__main__' :
     train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=False, drop_last=True) #TODO: set shuffle to True for larger mem
     val_dataloader = DataLoader (val_dataset, batch_size=batchsize*2, shuffle=False, drop_last=True)
 
-    max_val_steps = val_tokenlimit // (val_dataloader.batch_size * seqlen)
+    max_val_steps = val_tokenlimit // (val_dataloader.batch_size * seqlen) #denominator is tokens per step
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
