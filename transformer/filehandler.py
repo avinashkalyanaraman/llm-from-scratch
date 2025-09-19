@@ -55,7 +55,7 @@ class myDatasetInefficient2 (torch.utils.data.Dataset):
 class myDataset (torch.utils.data.Dataset):
     def __init__ (self, filepath, context_len=1024, cache_size = 10_000_000):
 
-        self.contents = np.load (filepath, mmap_mode='r')
+        self.contents = np.load (filepath, mmap_mode='r+')
         self.context_len = context_len
         self.num_sequences = max(len(self.contents) - context_len, 0) #handles case when len(contents) is < context_len
 
