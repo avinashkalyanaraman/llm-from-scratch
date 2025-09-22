@@ -67,8 +67,9 @@ if __name__ == '__main__' :
     tokenlimit = args.tokenlimit
     val_tokenlimit = args.val_tokenlimit
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
-    if torch.cuda.is_available():
+    if device.type == "cuda":
         # Enable TF32 tensor cores for FP32 matmuls/convs
         torch.set_float32_matmul_precision("high")
 
@@ -114,7 +115,6 @@ if __name__ == '__main__' :
 
     max_val_steps = val_tokenlimit // (val_dataloader.batch_size * seqlen) #denominator is tokens per step
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
     model = Transformer (d_model=d_model, num_heads=heads, d_ff=None, 
                          vocab_size=vocab_size, num_layers= num_layers,
@@ -138,7 +138,7 @@ if __name__ == '__main__' :
     opt = optimizer.AdamW ( model.parameters(), lr = lr, betas = (beta1,beta2), eps=1e-8, weight_decay = 1e-2)
     #opt = _optimizer.AdamW (model.parameters(), lr = lr, betas=(beta1,beta2))
 
-    #For cosine annealing: #TODO: Make it f(tokenlimit) as opp to f(train_dataloader)
+    #For cosine annealing:  f(tokenlimit) as opp to f(train_dataloader)
     tc = tokenlimit/(batchsize*seqlen)  #Suggested best practice: is to reach alpha_min at tokenlimit
     tw = 0.05*tc  #warmup fraction is 5% of tc!
     

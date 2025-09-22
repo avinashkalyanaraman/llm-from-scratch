@@ -43,6 +43,10 @@ if __name__ == '__main__' :
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
+    if device.type == "cuda":
+        # Enable TF32 tensor cores for FP32 matmuls/convs
+        torch.set_float32_matmul_precision("high")
+
     model = Transformer (d_model=d_model, num_heads=heads, d_ff=None, 
                          vocab_size=vocab_size, num_layers= num_layers,
                           max_seq_len=seqlen, device=device, dtype=torch.float32 )
