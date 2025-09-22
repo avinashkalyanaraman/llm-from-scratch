@@ -3,11 +3,8 @@ import os
 import sys
 import argparse
 import filehandler
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 
-#sys.path.append("./../assignment2-systems")
-#import cs336Basics.cs336_basics.model as cs336_model
-#import cs336Basics.cs336_basics.optimizer as _optimizer
 
 from transformer_pipeline import Transformer
 import optimizer
@@ -119,14 +116,10 @@ if __name__ == '__main__' :
     model = Transformer (d_model=d_model, num_heads=heads, d_ff=None, 
                          vocab_size=vocab_size, num_layers= num_layers,
                           max_seq_len=seqlen, device=device, dtype=torch.float32 )
-    
-
-    #model = cs336_model.BasicsTransformerLM(vocab_size, seqlen, d_model, num_layers, heads, (8*d_model//3), 10000)
-
     model.to(device)
 
     if device.type == "mps":
-    # Use aot_eager for MPS
+        # Use aot_eager for MPS
         model = torch.compile(model, backend="aot_eager")
     elif device.type == "cpu":
         # Skip torch.compile on M1 CPU to avoid clang/OpenMP errors
@@ -136,12 +129,10 @@ if __name__ == '__main__' :
         model = torch.compile(model)
 
     opt = optimizer.AdamW ( model.parameters(), lr = lr, betas = (beta1,beta2), eps=1e-8, weight_decay = 1e-2)
-    #opt = _optimizer.AdamW (model.parameters(), lr = lr, betas=(beta1,beta2))
 
     #For cosine annealing:  f(tokenlimit) as opp to f(train_dataloader)
     tc = tokenlimit/(batchsize*seqlen)  #Suggested best practice: is to reach alpha_min at tokenlimit
     tw = 0.05*tc  #warmup fraction is 5% of tc!
-    
     alpha_max = lr
     alpha_min = 1e-6
 
