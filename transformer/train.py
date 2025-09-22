@@ -109,7 +109,7 @@ if __name__ == '__main__' :
     final_file = 'checkpoints/final_model.pt'
 
     # Split the dataset
-    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=False, drop_last=True) #TODO: set shuffle to True for larger mem
+    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=True, drop_last=True) #TODO: set shuffle to True for larger mem
     val_dataloader = DataLoader (val_dataset, batch_size=batchsize*2, shuffle=False, drop_last=True)
 
     max_val_steps = val_tokenlimit // (val_dataloader.batch_size * seqlen) #denominator is tokens per step
@@ -139,10 +139,12 @@ if __name__ == '__main__' :
     #opt = _optimizer.AdamW (model.parameters(), lr = lr, betas=(beta1,beta2))
 
     #For cosine annealing: #TODO: Make it f(tokenlimit) as opp to f(train_dataloader)
-    tw = 0.05* (epochs* len(train_dataloader))
-    tc = epochs*len(train_dataloader)
+    tc = tokenlimit/(batchsize*seqlen)  #Suggested best practice: is to reach alpha_min at tokenlimit
+    tw = 0.05*tc  #warmup fraction is 5% of tc!
+    
     alpha_max = lr
     alpha_min = 1e-6
+
 
     num_steps = 0
     tokens_handled = 0
