@@ -5,9 +5,9 @@ import argparse
 import filehandler
 from torch.utils.data import DataLoader, random_split
 
-sys.path.append("./../assignment2-systems")
-import cs336Basics.cs336_basics.model as cs336_model
-import cs336Basics.cs336_basics.optimizer as _optimizer
+#sys.path.append("./../assignment2-systems")
+#import cs336Basics.cs336_basics.model as cs336_model
+#import cs336Basics.cs336_basics.optimizer as _optimizer
 
 from transformer_pipeline import Transformer
 import optimizer
@@ -21,7 +21,7 @@ import wandb
 import wandb_utils
 
 #How often to checkpoint the model, run-validation and log to wandb!
-CHECKPOINT_RATE = 1000
+CHECKPOINT_RATE = 5000
 VALIDATION_RATE = 1000
 WANDB_LOG_RATE = 50
 ISWANDB = True
@@ -66,6 +66,11 @@ if __name__ == '__main__' :
     isTime = args.time
     tokenlimit = args.tokenlimit
     val_tokenlimit = args.val_tokenlimit
+
+
+    if torch.cuda.is_available():
+        # Enable TF32 tensor cores for FP32 matmuls/convs
+        torch.set_float32_matmul_precision("high")
 
     #Wandb Config Settings!
     # Start a new wandb run to track this execution.
