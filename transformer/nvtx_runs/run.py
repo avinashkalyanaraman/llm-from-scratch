@@ -109,34 +109,34 @@ if __name__ == '__main__' :
         if isTime:
             start = timeit.default_timer()       
 
-        with nvtx.range("h2d"):
+        with nvtx.range(f"h2d-{num_steps}"):
             X = X.to(device)
             Y = Y.to(device) 
 
         opt.zero_grad(set_to_none=True) #Faster as : sets each parameter’s .grad to None instead of a tensor of zeros
 
-        with nvtx.range("forward"):
+        with nvtx.range(f"forward-{num_steps}"):
             y_hat = model (X)
 
-        with nvtx.range("loss"):
+        with nvtx.range(f"loss-{num_steps}"):
             computed_loss = loss.getCrossEntropyLossFromClass(Y, y_hat)
 
         #Set learning rate based on schedule!
         
-        with nvtx.range("lr"):
+        with nvtx.range(f"lr-{num_steps}"):
             t = num_steps
             for group in opt.param_groups: #there are a set of param groups
                 curr_lr = optimizer.getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw,tc)
                 group['lr'] = curr_lr
 
-        with nvtx.range("backward"):
+        with nvtx.range(f"backward-{num_steps}"):
             computed_loss.backward() #Computes the gradients
                 
-        with nvtx.range("clip"):
+        with nvtx.range(f"clip-{num_steps}"):
             optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
         
     
-        with nvtx.range("optimizer"):
+        with nvtx.range(f"optimizer-{num_steps}"):
             opt.step() #Updates the weights
 
         tokens_handled += Y.numel()
