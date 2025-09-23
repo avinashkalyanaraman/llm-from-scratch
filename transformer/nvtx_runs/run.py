@@ -69,7 +69,8 @@ if __name__ == '__main__' :
 
 
     # Split the dataset
-    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=False, drop_last=True) #TODO: set shuffle to True for larger mem
+    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=False, drop_last=True, pin_memory=True)
+    #pin_memory=True locks the batch page in memory, thus preventing swap out. This permits gpu dma and perf gains! 
 
 
     model = Transformer (d_model=d_model, num_heads=heads, d_ff=None, 
@@ -110,8 +111,8 @@ if __name__ == '__main__' :
             start = timeit.default_timer()       
 
         with nvtx.range(f"h2d-{num_steps}"):
-            X = X.to(device)
-            Y = Y.to(device) 
+            X = X.to(device, non_blocking=True)
+            Y = Y.to(device, non_blocking=True) 
 
         opt.zero_grad(set_to_none=True) #Faster as : sets each parameter’s .grad to None instead of a tensor of zeros
 
