@@ -1,5 +1,9 @@
 import torch
+import sys
 import argparse
+
+sys.path.append("./../")
+
 import filehandler
 from torch.utils.data import DataLoader
 
@@ -99,6 +103,9 @@ if __name__ == '__main__' :
 
     for batchnum, (X,Y) in enumerate (train_dataloader): 
 
+        if num_steps == warmup_steps:
+            nvtx.range_push("POST-WARMUP") #Setting this label helps profile post-warmup performance
+
         if isTime:
             start = timeit.default_timer()       
 
@@ -111,21 +118,24 @@ if __name__ == '__main__' :
         with nvtx.range("forward"):
             y_hat = model (X)
 
-        computed_loss = loss.getCrossEntropyLossFromClass(Y, y_hat)
+        with nvtx.range("loss"):
+            computed_loss = loss.getCrossEntropyLossFromClass(Y, y_hat)
 
         #Set learning rate based on schedule!
-        t = num_steps
-
-        for group in opt.param_groups: #there are a set of param groups
-            curr_lr = optimizer.getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw,tc)
-            group['lr'] = curr_lr
+        
+        with nvtx.range("lr"):
+            t = num_steps
+            for group in opt.param_groups: #there are a set of param groups
+                curr_lr = optimizer.getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw,tc)
+                group['lr'] = curr_lr
 
         with nvtx.range("backward"):
             computed_loss.backward() #Computes the gradients
                 
-        optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
+        with nvtx.range("clip"):
+            optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
         
-        
+    
         with nvtx.range("optimizer"):
             opt.step() #Updates the weights
 
@@ -143,6 +153,7 @@ if __name__ == '__main__' :
 
         #Have we run enough
         if num_steps >= max_steps:
+            nvtx.range_pop()            
             break
 
 
