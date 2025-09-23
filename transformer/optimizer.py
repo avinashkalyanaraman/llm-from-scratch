@@ -102,6 +102,8 @@ class AdamW (torch.optim.Optimizer):
             epsilon = group ['epsilon']
             weight_decay = group ['weight_decay']
 
+            isDenominatorComputed = False
+
             #each group has a set of parameters
             for param in group['params']:
                 if param.grad is None: #in-case: requires_grad is set to False!
@@ -120,11 +122,16 @@ class AdamW (torch.optim.Optimizer):
                 m_t = beta1* m_t + (1-beta1) * grad
                 v_t = beta2* v_t + (1-beta2) * (grad**2)
 
+
+                if not isDenominatorComputed: #Do bias correction only once; since it is the same for all params!
+                    beta1_pow_t = math.pow(beta1,t)
+                    beta2_pow_t = math.pow(beta2,t)
+                    isDenominatorComputed = True
                 
 
-                #bias correction
-                m_t_hat = m_t / (1-math.pow(beta1,t))
-                v_t_hat = v_t / (1-math.pow(beta2,t))
+                #bias correction 
+                m_t_hat = m_t / (1-beta1_pow_t)
+                v_t_hat = v_t / (1-beta2_pow_t)
 
                 #Store the new state values that we need for next iteration!
                 param_state['m_t'] = m_t #note that the vals stored are pre-bias correction!
