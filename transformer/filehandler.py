@@ -86,9 +86,6 @@ class myDataset (torch.utils.data.Dataset):
 
         #return torch.from_numpy(x_val.copy()), torch.from_numpy(y_val.copy())  #DataLoader expects torch.Tensor. This helps!
         return torch.from_numpy(x_val), torch.from_numpy(y_val)
-
-
-
         
         '''
         #The above .copy() of the initial implmn is because 
