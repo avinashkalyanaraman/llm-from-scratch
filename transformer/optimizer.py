@@ -20,17 +20,22 @@ def getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw, tc):
     assert False #unreachable!
 
 
+
+#Profiling showed certain implementations to cause gpu2cpu async x-fer. notes to learn. now code keeps it in gpu!
 def gradientClipping (params, max_l2norm, eps = 1e-6):
-    l2_norm_sq= sum([(ele.grad**2).sum() for ele in params if ele.grad is not None]) #returns a tensor (1,)
-    l2_norm = math.sqrt (l2_norm_sq)
+    l2_norm_sq= sum([(ele.grad**2).sum() for ele in params if ele.grad is not None]) #returns a tensor (1,). 
+    #the list before sum() contains references to tensors on gpu. no d2h x-fer
+    l2_norm = torch.sqrt (l2_norm_sq) #Don't use math.sqrt() ; it causes a gpu2cpu transfer
 
     #l2_norm =  math.sqrt (sum([torch.norm(ele.grad.data).item()**2 for ele in params]))
-
     '''
     .item() in the second version moves each tensor to CPU as a Python float, which can be slightly slower on GPU.
-    The first version keeps everything as PyTorch tensors, which is better if you want to remain fully on GPU.  
+    The first version keeps everything as PyTorch tensors, which is better to run fully on GPU.  
     '''
 
+
+    '''
+    #We want to avoid the "if" which compares torch scalar w/ cpu scalar causing a gpu2cpu x-fer
 
     if l2_norm > max_l2norm:
         #do clipping
@@ -40,6 +45,13 @@ def gradientClipping (params, max_l2norm, eps = 1e-6):
             scaling_factor = max_l2norm/(l2_norm + eps)
             #param.grad.data = param.grad.data * scaling_factor #isn't in-place!
             param.grad.data.mul_(scaling_factor)   #in-place
+    '''
+    
+    for param in params:
+        if param.grad is None:
+            continue
+        scaling_factor = (max_l2norm/(l2_norm + eps)).clamp(max=1.0) #eliminates the "if" condition
+        param.grad.data.mul_(scaling_factor) #in-place!
 
 
 class SGD (torch.optim.Optimizer):
