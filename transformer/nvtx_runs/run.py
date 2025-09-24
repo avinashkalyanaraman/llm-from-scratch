@@ -166,9 +166,11 @@ if __name__ == '__main__' :
 
         # --- preload first batch on the copy stream ---
         host_X, host_Y = next(it)                                # CPU (pinned) batch
-        with torch.cuda.stream(copy_stream):
-            next_X = host_X.to(device, non_blocking=True)
-            next_Y = host_Y.to(device, non_blocking=True)
+        
+        with nvtx.range(f"h2d1-{num_steps}"):
+            with torch.cuda.stream(copy_stream):
+                next_X = host_X.to(device, non_blocking=True)
+                next_Y = host_Y.to(device, non_blocking=True)
 
 
 
@@ -178,35 +180,38 @@ if __name__ == '__main__' :
                 nvtx.range_push("POST-WARMUP")  # when you’re ready to measure
 
             # Wait for the prefetch to finish, then use the tensors on default stream
+            #Only the first iteration results in "a block" (i.e., there is no compute on the gpu to overlap the x-fer!)
             torch.cuda.current_stream().wait_stream(copy_stream)
             X, Y = next_X, next_Y
 
             # Kick off prefetch of the *following* batch immediately
-            try:
-                host_X, host_Y = next(it)
-                with torch.cuda.stream(copy_stream):
-                    next_X = host_X.to(device, non_blocking=True)
-                    next_Y = host_Y.to(device, non_blocking=True)
-            except StopIteration:
-                next_X = next_Y = None #helps break at the bottom of the loop!
+            with nvtx.range(f"h2d2-{num_steps}"):
+                try:
+                    host_X, host_Y = next(it)
+                    with torch.cuda.stream(copy_stream):
+                        next_X = host_X.to(device, non_blocking=True)
+                        next_Y = host_Y.to(device, non_blocking=True)
+                except StopIteration:
+                    next_X = next_Y = None #helps break at the bottom of the loop!
+
 
             opt.zero_grad(set_to_none=True)
 
-            with nvtx.range("forward"):
+            with nvtx.range(f"forward-{num_steps}"):
                 y_hat = model(X)
-            with nvtx.range("loss"):
+            with nvtx.range(f"loss-{num_steps}"):
                 computed_loss = loss.getCrossEntropyLossFromClass(Y, y_hat)
-                        #Set learning rate based on schedule!
-            
+                        
+            #Set learning rate based on schedule!
             with nvtx.range(f"lr-{num_steps}"):
                 t = num_steps
                 for group in opt.param_groups: #there are a set of param groups
                     curr_lr = optimizer.getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw,tc)
                     group['lr'] = curr_lr
 
-            with nvtx.range("backward"):
+            with nvtx.range(f"backward-{num_steps}"):
                 computed_loss.backward()
-            with nvtx.range("optimizer_step"):
+            with nvtx.range(f"optimizer_step-{num_steps}"):
                 opt.step()
 
             tokens_handled += Y.numel()      
