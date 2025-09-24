@@ -86,9 +86,6 @@ if __name__ == '__main__' :
 
     num_steps = 0
     tokens_handled = 0
-
-    step_times = []
-    throughputs = []
     warmup_steps = 5
 
 
@@ -137,14 +134,10 @@ if __name__ == '__main__' :
         torch.cuda.synchronize()
         end = timeit.default_timer()
         elapsed = end - start
-        throughput = Y.numel() / max(elapsed, 1e-9)
-        step_times.append (elapsed)
-        throughputs.append(throughput)
+        throughput = Y.numel()*(num_steps-warmup_steps) / max(elapsed, 1e-9)
 
-        #print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
-        #print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
-        print (f"throughput = {throughput}")
-        print (f"total time for {num_steps-warmup_steps} was {elapsed:0.2f}s")
+        print (f"throughput = {throughput} tokens/sec")
+        print (f"total time for {num_steps-warmup_steps} steps was {elapsed:0.2f}s")
 
     else:
         #the second stream; the copy stream which is used to copy data! 
@@ -211,11 +204,7 @@ if __name__ == '__main__' :
         torch.cuda.synchronize()
         end = timeit.default_timer()
         elapsed = end - start
-        throughput = Y.numel() / max(elapsed, 1e-9)
-        step_times.append (elapsed)
-        throughputs.append(throughput)
-        
-        #print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
-        #print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
-        print (f"throughput = {throughput}")
-        print (f"total time for {num_steps-warmup_steps} was {elapsed:0.2f}s")
+        throughput = Y.numel()*(num_steps-warmup_steps) / max(elapsed, 1e-9)
+
+        print (f"throughput = {throughput} tokens/sec")
+        print (f"total time for {num_steps-warmup_steps} steps was {elapsed:0.2f}s")
