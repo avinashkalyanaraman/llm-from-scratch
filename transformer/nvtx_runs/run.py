@@ -161,6 +161,8 @@ if __name__ == '__main__' :
         print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
 
     else:
+        #the second stream; the copy stream which is used to copy data! 
+        # compute kernels go on the default stream!
         copy_stream = torch.cuda.Stream()
         it = iter(train_dataloader)
 
@@ -173,22 +175,23 @@ if __name__ == '__main__' :
                 next_Y = host_Y.to(device, non_blocking=True)
 
 
-
         while True:
 
             if num_steps == warmup_steps:
-                nvtx.range_push("POST-WARMUP")  # when you’re ready to measure
+                nvtx.range_push("POST-WARMUP")  # when ready to measure
 
-            # Wait for the prefetch to finish, then use the tensors on default stream
-            #Only the first iteration results in "a block" (i.e., there is no compute on the gpu to overlap the x-fer!)
+            # Wait for the transfer on copy-stream to finish, then use the tensors on default stream
+            #Only the first iteration results in "a block"
+            #  (i.e., there is no compute on the gpu to overlap the x-fer!)
             torch.cuda.current_stream().wait_stream(copy_stream)
             X, Y = next_X, next_Y
-            
+
             # IMPORTANT: keep these allocations alive until the default stream finishes with them
+            # Prevents X from being released prematurely 
             X.record_stream(torch.cuda.current_stream())
             Y.record_stream(torch.cuda.current_stream())
 
-            # Kick off prefetch of the *following* batch immediately
+            # Kick off transfer of the *following* batch immediately
             with nvtx.range(f"h2d2-{num_steps}"):
                 try:
                     host_X, host_Y = next(it)
