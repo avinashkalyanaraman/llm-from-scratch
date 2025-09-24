@@ -183,6 +183,10 @@ if __name__ == '__main__' :
             #Only the first iteration results in "a block" (i.e., there is no compute on the gpu to overlap the x-fer!)
             torch.cuda.current_stream().wait_stream(copy_stream)
             X, Y = next_X, next_Y
+            
+            # IMPORTANT: keep these allocations alive until the default stream finishes with them
+            X.record_stream(torch.cuda.current_stream())
+            Y.record_stream(torch.cuda.current_stream())
 
             # Kick off prefetch of the *following* batch immediately
             with nvtx.range(f"h2d2-{num_steps}"):
