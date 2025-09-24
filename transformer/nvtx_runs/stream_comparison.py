@@ -96,15 +96,18 @@ if __name__ == '__main__' :
     print (f"total # trainable params in model = {total_num_trainable_params/1e6}M")
 
     if not isStream:
+
         for batchnum, (X,Y) in enumerate (train_dataloader): 
 
-            start = timeit.default_timer()       
+            if num_steps == warmup_steps:
+                start = timeit.default_timer()
+
 
             X = X.to(device, non_blocking=True)
             Y = Y.to(device, non_blocking=True) 
             
-            # Simulate delay on the copy stream (~10 ms)
-            torch.cuda._sleep(int(1e7)) #this is equal to a slow h<->d link or a larger x-fer
+            # Simulate delay on the copy stream (~50 ms)
+            torch.cuda._sleep(int(5e8)) #this is equal to a slow h<->d link or a larger x-fer
 
             opt.zero_grad(set_to_none=True) #Faster as : sets each parameter’s .grad to None instead of a tensor of zeros
 
@@ -126,19 +129,22 @@ if __name__ == '__main__' :
             tokens_handled += Y.numel()
             num_steps += 1
 
-            #Timing
-            end = timeit.default_timer()
-            elapsed = end - start
-            throughput = Y.numel() / max(elapsed, 1e-9)
-            step_times.append (elapsed)
-            throughputs.append(throughput)
-
             #Have we run enough
             if num_steps >= max_steps:
                 break
+        
+        #Timing
+        torch.cuda.synchronize()
+        end = timeit.default_timer()
+        elapsed = end - start
+        throughput = Y.numel() / max(elapsed, 1e-9)
+        step_times.append (elapsed)
+        throughputs.append(throughput)
 
-        print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
-        print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
+        #print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
+        #print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
+        print (f"throughput = {throughput}")
+        print (f"total time for {num_steps-warmup_steps} was {elapsed:0.2f}s")
 
     else:
         #the second stream; the copy stream which is used to copy data! 
@@ -152,13 +158,14 @@ if __name__ == '__main__' :
         with torch.cuda.stream(copy_stream):
             next_X = host_X.to(device, non_blocking=True)
             next_Y = host_Y.to(device, non_blocking=True)
-            
-            # Simulate delay on the copy stream (~10 ms)
-            torch.cuda._sleep(int(1e7)) #this is equal to a slow h<->d link or a larger x-fer
+
+            # Simulate delay on the copy stream (~50 ms)
+            torch.cuda._sleep(int(5e8)) #this is equal to a slow h<->d link or a larger x-fer
 
         while True:
 
-            start = timeit.default_timer()       
+            if num_steps == warmup_steps:
+                start = timeit.default_timer()
 
             # Wait for the transfer on copy-stream to finish, then use the tensors on default stream
             #Only the first iteration results in "a block"
@@ -200,12 +207,15 @@ if __name__ == '__main__' :
             if next_X is None or num_steps >= max_steps:
                 break
 
-            #Timing
-            end = timeit.default_timer()
-            elapsed = end - start
-            throughput = Y.numel() / max(elapsed, 1e-9)
-            step_times.append (elapsed)
-            throughputs.append(throughput)
+        #Timing
+        torch.cuda.synchronize()
+        end = timeit.default_timer()
+        elapsed = end - start
+        throughput = Y.numel() / max(elapsed, 1e-9)
+        step_times.append (elapsed)
+        throughputs.append(throughput)
         
-        print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
-        print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
+        #print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
+        #print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
+        print (f"throughput = {throughput}")
+        print (f"total time for {num_steps-warmup_steps} was {elapsed:0.2f}s")
