@@ -34,6 +34,7 @@ if __name__ == '__main__' :
     parser.add_argument("--tfile", type=str, default="temp/temp.npy", help="file with tokens to be used as training")
     parser.add_argument("--torchcompile", action="store_true", help="enable torchcompile")
     parser.add_argument("--steps", type=int, default=20, help="total # of steps after warmup to run" )
+    parser.add_argument("--stream", action="store_true", help="whether to stream a training batch while compute is happening on gpu!")
 
     args = parser.parse_args()
 
@@ -50,6 +51,7 @@ if __name__ == '__main__' :
     t_fname = args.tfile
     isTorchCompile = args.torchcompile
     max_steps = args.steps
+    isStream = args.stream
 
     epochs = 1
 
@@ -100,59 +102,117 @@ if __name__ == '__main__' :
     total_num_trainable_params= sum([ele.numel() for ele in model.parameters() if ele.requires_grad])
     print (f"total # trainable params in model = {total_num_trainable_params/1e6}M")
 
-    for batchnum, (X,Y) in enumerate (train_dataloader): 
+    if not isStream:
 
-        if num_steps == warmup_steps:
-            nvtx.range_push("POST-WARMUP") #Setting this label helps profile post-warmup performance
+        for batchnum, (X,Y) in enumerate (train_dataloader): 
 
-        start = timeit.default_timer()       
+            if num_steps == warmup_steps:
+                nvtx.range_push("POST-WARMUP") #Setting this label helps profile post-warmup performance
 
-        with nvtx.range(f"h2d-{num_steps}"):
-            X = X.to(device, non_blocking=True)
-            Y = Y.to(device, non_blocking=True) 
+            start = timeit.default_timer()       
 
-        opt.zero_grad(set_to_none=True) #Faster as : sets each parameter’s .grad to None instead of a tensor of zeros
+            with nvtx.range(f"h2d-{num_steps}"):
+                X = X.to(device, non_blocking=True)
+                Y = Y.to(device, non_blocking=True) 
 
-        with nvtx.range(f"forward-{num_steps}"):
-            y_hat = model (X)
+            opt.zero_grad(set_to_none=True) #Faster as : sets each parameter’s .grad to None instead of a tensor of zeros
 
-        with nvtx.range(f"loss-{num_steps}"):
-            computed_loss = loss.getCrossEntropyLossFromClass(Y, y_hat)
+            with nvtx.range(f"forward-{num_steps}"):
+                y_hat = model (X)
 
-        #Set learning rate based on schedule!
+            with nvtx.range(f"loss-{num_steps}"):
+                computed_loss = loss.getCrossEntropyLossFromClass(Y, y_hat)
+
+            #Set learning rate based on schedule!
+            with nvtx.range(f"lr-{num_steps}"):
+                t = num_steps
+                for group in opt.param_groups: #there are a set of param groups
+                    curr_lr = optimizer.getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw,tc)
+                    group['lr'] = curr_lr
+
+            with nvtx.range(f"backward-{num_steps}"):
+                computed_loss.backward() #Computes the gradients
+                    
+            with nvtx.range(f"clip-{num_steps}"):
+                optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
+            
         
-        with nvtx.range(f"lr-{num_steps}"):
-            t = num_steps
-            for group in opt.param_groups: #there are a set of param groups
-                curr_lr = optimizer.getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw,tc)
-                group['lr'] = curr_lr
+            with nvtx.range(f"optimizer-{num_steps}"):
+                opt.step() #Updates the weights
 
-        with nvtx.range(f"backward-{num_steps}"):
-            computed_loss.backward() #Computes the gradients
-                
-        with nvtx.range(f"clip-{num_steps}"):
-            optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
-        
-    
-        with nvtx.range(f"optimizer-{num_steps}"):
-            opt.step() #Updates the weights
+            tokens_handled += Y.numel()
+            num_steps += 1
 
-        tokens_handled += Y.numel()
-        num_steps += 1
-
-        #Timing
-        end = timeit.default_timer()
-        elapsed = end - start
-        throughput = Y.numel() / max(elapsed, 1e-9)
-        step_times.append (elapsed)
-        throughputs.append(throughput)
+            #Timing
+            end = timeit.default_timer()
+            elapsed = end - start
+            throughput = Y.numel() / max(elapsed, 1e-9)
+            step_times.append (elapsed)
+            throughputs.append(throughput)
 
 
-        #Have we run enough
-        if num_steps >= max_steps:
-            nvtx.range_pop()            
-            break
+            #Have we run enough
+            if num_steps >= max_steps:
+                nvtx.range_pop()            
+                break
 
 
-    print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
-    print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
+        print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
+        print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
+
+    else:
+        copy_stream = torch.cuda.Stream()
+        it = iter(train_dataloader)
+
+        # --- preload first batch on the copy stream ---
+        host_X, host_Y = next(it)                                # CPU (pinned) batch
+        with torch.cuda.stream(copy_stream):
+            next_X = host_X.to(device, non_blocking=True)
+            next_Y = host_Y.to(device, non_blocking=True)
+
+
+
+        while True:
+
+            if num_steps == warmup_steps:
+                nvtx.range_push("POST-WARMUP")  # when you’re ready to measure
+
+            # Wait for the prefetch to finish, then use the tensors on default stream
+            torch.cuda.current_stream().wait_stream(copy_stream)
+            X, Y = next_X, next_Y
+
+            # Kick off prefetch of the *following* batch immediately
+            try:
+                host_X, host_Y = next(it)
+                with torch.cuda.stream(copy_stream):
+                    next_X = host_X.to(device, non_blocking=True)
+                    next_Y = host_Y.to(device, non_blocking=True)
+            except StopIteration:
+                next_X = next_Y = None #helps break at the bottom of the loop!
+
+            opt.zero_grad(set_to_none=True)
+
+            with nvtx.range("forward"):
+                y_hat = model(X)
+            with nvtx.range("loss"):
+                computed_loss = loss.getCrossEntropyLossFromClass(Y, y_hat)
+                        #Set learning rate based on schedule!
+            
+            with nvtx.range(f"lr-{num_steps}"):
+                t = num_steps
+                for group in opt.param_groups: #there are a set of param groups
+                    curr_lr = optimizer.getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw,tc)
+                    group['lr'] = curr_lr
+
+            with nvtx.range("backward"):
+                computed_loss.backward()
+            with nvtx.range("optimizer_step"):
+                opt.step()
+
+            tokens_handled += Y.numel()      
+            num_steps += 1
+
+            if next_X is None or num_steps >= max_steps:
+                break
+
+        nvtx.range_pop()
