@@ -102,6 +102,9 @@ if __name__ == '__main__' :
 
             X = X.to(device, non_blocking=True)
             Y = Y.to(device, non_blocking=True) 
+            
+            # Simulate delay on the copy stream (~10 ms)
+            torch.cuda._sleep(int(1e7)) #this is equal to a slow h<->d link or a larger x-fer
 
             opt.zero_grad(set_to_none=True) #Faster as : sets each parameter’s .grad to None instead of a tensor of zeros
 
@@ -130,11 +133,9 @@ if __name__ == '__main__' :
             step_times.append (elapsed)
             throughputs.append(throughput)
 
-
             #Have we run enough
             if num_steps >= max_steps:
                 break
-
 
         print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
         print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
@@ -151,6 +152,9 @@ if __name__ == '__main__' :
         with torch.cuda.stream(copy_stream):
             next_X = host_X.to(device, non_blocking=True)
             next_Y = host_Y.to(device, non_blocking=True)
+            
+            # Simulate delay on the copy stream (~10 ms)
+            torch.cuda._sleep(int(1e7)) #this is equal to a slow h<->d link or a larger x-fer
 
         while True:
 
