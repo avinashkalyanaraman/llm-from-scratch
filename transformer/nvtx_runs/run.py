@@ -32,7 +32,6 @@ if __name__ == '__main__' :
     parser.add_argument("--num_layers", type=int, default=1, help="num of layers")
     parser.add_argument("--vocabsize", type=int, default=50304, help="vocab size of the tokenizer used! Power of 64 helps!")
     parser.add_argument("--tfile", type=str, default="temp/temp.npy", help="file with tokens to be used as training")
-    parser.add_argument("--time", action="store_true", help="enable timing")
     parser.add_argument("--torchcompile", action="store_true", help="enable torchcompile")
     parser.add_argument("--steps", type=int, default=20, help="total # of steps after warmup to run" )
 
@@ -49,7 +48,6 @@ if __name__ == '__main__' :
     num_layers = args.num_layers
     vocab_size = args.vocabsize
     t_fname = args.tfile
-    isTime = args.time
     isTorchCompile = args.torchcompile
     max_steps = args.steps
 
@@ -107,8 +105,7 @@ if __name__ == '__main__' :
         if num_steps == warmup_steps:
             nvtx.range_push("POST-WARMUP") #Setting this label helps profile post-warmup performance
 
-        if isTime:
-            start = timeit.default_timer()       
+        start = timeit.default_timer()       
 
         with nvtx.range(f"h2d-{num_steps}"):
             X = X.to(device, non_blocking=True)
@@ -144,12 +141,11 @@ if __name__ == '__main__' :
         num_steps += 1
 
         #Timing
-        if isTime:
-            end = timeit.default_timer()
-            elapsed = end - start
-            throughput = Y.numel() / max(elapsed, 1e-9)
-            step_times.append (elapsed)
-            throughputs.append(throughput)
+        end = timeit.default_timer()
+        elapsed = end - start
+        throughput = Y.numel() / max(elapsed, 1e-9)
+        step_times.append (elapsed)
+        throughputs.append(throughput)
 
 
         #Have we run enough
@@ -158,6 +154,5 @@ if __name__ == '__main__' :
             break
 
 
-    if isTime and len(step_times) > 0: 
-        print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
-        print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
+    print (f"mean running time = {statistics.mean(step_times[warmup_steps:]):0.2f}s")
+    print (f"mean throughput = {statistics.mean(throughputs[warmup_steps:]):0.2f} tokens/sec")
