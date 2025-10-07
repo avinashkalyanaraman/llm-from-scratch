@@ -53,40 +53,41 @@ def entropy_from_logits (logits, temperature = 1): #logits is [B,S,V]
     return entropy
 
 
-def policyViaLLM ():
+def policyViaLLM (text, compute_entropy = True, temperature_sweep=False, isPrint = False):
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     model = AutoModelForCausalLM.from_pretrained("gpt2")
 
     #Tokenize the input and call the model!
-    inputs = tokenizer("The clouds are sunny", return_tensors="pt") 
+    inputs = tokenizer(text, return_tensors="pt") 
 
     model.eval()
     with torch.no_grad():
         outputs = model(**inputs)
 
     logits = outputs.logits
+    #print (f"logits shape = {logits.shape}")
 
-    action, _, _ = sample_action_from_logits (logits, temperature = 0.5)
-    ids = action.squeeze(-1).tolist()     # [B] list of ints
-    print("tokens:", [tokenizer.decode([i]) for i in ids], "with temp : 0.5")
+    temperatures = [0.5, 1, 2] if temperature_sweep else [1]
 
-
-    action, _, _ = sample_action_from_logits (logits, temperature = 1)
-    ids = action.squeeze(-1).tolist()     # [B] list of ints
-    print("tokens:", [tokenizer.decode([i]) for i in ids], "with temp : 1")
-
-
-    action, _, _ = sample_action_from_logits (logits, temperature = 2)
-    ids = action.squeeze(-1).tolist()     # [B] list of ints
-    print("tokens:", [tokenizer.decode([i]) for i in ids], "with temp : 2")
+    for temperature in temperatures:
+        if temperature == 1:
+            action, chosen_probs, chosen_logprobs = sample_action_from_logits (logits, temperature = temperature)
+            ids = action.squeeze(-1).tolist()     # [B] list of ints
+        else:
+            sweep_action, _, _ = sample_action_from_logits (logits, temperature = temperature)
+            ids = sweep_action.squeeze(-1).tolist()     # [B] list of ints
+        
+        if isPrint:
+            print("tokens:", [tokenizer.decode([i]) for i in ids], "with temp : ", temperature) 
 
 
     #Compute the mean entropy for this q:
-    entropy_from_logits(logits)
+    if compute_entropy:
+        entropy_from_logits(logits)
 
 
-    return
+    return action, chosen_probs, chosen_logprobs #Returns the case when temperature = 1
     
 
 if __name__ == '__main__':
@@ -104,6 +105,6 @@ if __name__ == '__main__':
         entropy_from_logits (logits, temperature=temp)
         print ("------"*10)
 
-    policyViaLLM ()
+    policyViaLLM ("The clouds are sunny", compute_entropy = True, temperature_sweep=True, isPrint=True)
 
     
