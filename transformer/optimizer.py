@@ -25,7 +25,8 @@ def getCurrentLearningRateBasedOnSchedule (t, alpha_max, alpha_min, tw, tc):
 def gradientClipping (params, max_l2norm, eps = 1e-6):
     l2_norm_sq= sum([(ele.grad**2).sum() for ele in params if ele.grad is not None]) #returns a tensor (1,). 
     #the list before sum() contains references to tensors on gpu. no d2h x-fer
-    l2_norm = torch.sqrt (l2_norm_sq) #Don't use math.sqrt() ; it causes a gpu2cpu transfer
+    l2_norm = torch.sqrt (l2_norm_sq) 
+    #Don't use math.sqrt() ; it causes a gpu2cpu transfer
 
     #l2_norm =  math.sqrt (sum([torch.norm(ele.grad.data).item()**2 for ele in params]))
     '''
