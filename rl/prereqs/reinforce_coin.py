@@ -63,8 +63,9 @@ if __name__ == "__main__":
     for epoch_num in range(epochs):
         print (f"epoch num = {epoch_num}")
 
-        print (f" theta = {policy.theta.item()}")
         thetas.append (torch.sigmoid(policy.theta).item())
+        print (f" theta = {policy.theta.item()}")
+
 
         optimizer.zero_grad()
         actions, logprobs = policy()
