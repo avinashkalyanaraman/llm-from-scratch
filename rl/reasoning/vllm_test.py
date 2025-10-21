@@ -15,6 +15,7 @@ if __name__ == '__main__':
     prompt_template = getPromptTemplate (prompt_filepath)
 
     base_prompts = ["Compute 12 + 34*2 and explain.", "I have two apples today. I will eat one tomorrow. How many will I have the day after tomorrow?"]
+    base_prompts = [base_prompts[1]]
     prompts = [prompt_template.format(question=ele) for ele in base_prompts]
 
 
@@ -27,12 +28,15 @@ if __name__ == '__main__':
 
     llm = LLM(
         model=model_id,
-    #    dtype="bfloat16",          # CPU-friendly dtypes: fp32/bf16 per docs
+        dtype="float16",   
+        max_num_seqs=1
     )
 
     
-    sampling_params = SamplingParams(max_tokens=1024, temperature=1.0, top_p = 1.0, stop=["\n"])
+    sampling_params = SamplingParams(max_tokens=2048, temperature=1.0, top_p = 1.0, stop=["</answer>"])
+    sampling_params.include_stop_str_in_output = True #</answer> will be incl. in generation
     outputs = llm.generate(prompts, sampling_params)
 
     for o in outputs:
+        print ("-----------"*3)
         print(o.outputs[0].text)
