@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import grader.drgrpo_grader
 from datasets import load_dataset
+import pickle
 
 def getPromptTemplate (prompt_filepath):
     with open(prompt_filepath, "r", encoding="utf-8") as f:
@@ -15,8 +16,7 @@ def rewritePrompt (sample, prompt_template):
 
 def evaluate_vllm(llm, grader_fn, prompts, solutions, sampling_params):
     """
-    Evaluate a language model on a list of prompts,
-    compute evaluation metrics, and serialize results to disk.
+    Evaluate a language model on a list of prompts and compute evaluation metrics
     """
     outputs = llm.generate(prompts, sampling_params)
     results = []
@@ -76,6 +76,9 @@ if __name__ == '__main__':
     
     try:
         outputs = evaluate_vllm (llm, grader.drgrpo_grader.r1_zero_reward_fn, prompts, solutions, sampling_params)
-    
+
+        with open("zero_shot_results.pkl", "wb") as f:
+            pickle.dump(outputs, f)
+
     finally:
         del llm
