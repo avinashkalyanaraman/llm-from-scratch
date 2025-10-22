@@ -24,7 +24,7 @@ def evaluate_vllm(llm, grader_fn, prompts, solutions, sampling_params):
     for o, solution, prompt in zip(outputs, solutions, prompts):
         generation = o.outputs[0].text
         result = grader_fn (generation, solution)
-        results.append ( (prompt, solution, result) )
+        results.append ( (generation, solution, result) )
 
     return results
 
