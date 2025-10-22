@@ -67,7 +67,7 @@ if __name__ == '__main__':
     llm = LLM(
         model=model_id,
         #dtype="float16",   
-        max_num_seqs=8
+        max_num_seqs=128
     )
 
     
