@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 def tokenize_prompt_and_output (prompt_strs, output_strs, tokenizer):
     result = {}
@@ -44,11 +44,48 @@ def tokenize_prompt_and_output (prompt_strs, output_strs, tokenizer):
     return result
 
 
+def compute_entropy (logits): #logits : [batchsize, seqlen, vocabsize]
+
+    probs = torch.softmax (logits, dim = -1) #[batchsize, seqlen, vocabsize] #p(x)
+
+    #below is numerically stable way for logprobs. there is a pytorch way torch.xlogy which computes x*log(y) that handles 0s better!
+    logprobs = logits - torch.logsumexp (logits, dim = -1, keepdim=True) #[batchsize, seqlen, V] <--logsumexp uses math subtraction trick!
+    entropy = -1 * torch.sum ((probs * logprobs), dim = -1) #[batchsize, seqlen]
+
+    #logprobs2 = torch.log (probs)
+    #entropy2 = -1 * torch.sum ((probs*logprobs2), dim= -1)
+
+    return entropy
+
+def get_response_log_probs (model, input_ids, labels, return_token_entropy):
+    #Call model on input_ids
+    
+    logits = model (input_ids).logits #[batchsize, seqlen, vocabsize]
+    agg_logprobs = logits - torch.logsumexp (logits, dim = -1, keepdim=True) #[batchsize, seqlen, V] <--logsumexp uses math subtraction trick!
+    logprobs = torch.gather (agg_logprobs, dim = -1, index = labels.unsqueeze(-1)) #labels made to [b,s,1] . o/p logprobs is [b,s,1]
+    logprobs = logprobs.squeeze (-1)
+
+    if return_token_entropy:
+        return { "log_probs" : logprobs, "token_entropy" : compute_entropy (logits)}
+    return {"log_probs": logprobs} #if we weren't requested entropy!
+
+def masked_normalize (tensor, mask, normalize_constant, dim): #tensor and mask should be same shape!
+    masked_tensor = tensor.masked_fill (~mask.bool(), 0)
+
+    summed_tensor = torch.sum (masked_tensor, dim = dim, keepdim=(dim is not None)) 
+    #of shape [...1...] all orig except one being sumed on when dim is not None
+    #when dim is None : scalar!
+
+    output = summed_tensor/normalize_constant
+    return output
+
+
 
 if __name__ == '__main__':
     model_id = "Qwen/Qwen2.5-Math-1.5B"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-
+    model = AutoModelForCausalLM.from_pretrained(model_id)
+                                                 
     prompt_strs = ["Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?",
                     "Weng earns $12 an hour for babysitting. Yesterday, she just did 50 minutes of babysitting. How much did she earn?" ,
                       "Betty is saving money for a new wallet which costs $100. Betty has only half of the money she needs. Her parents decided to give her $15 for that purpose, and her grandparents twice as much as her parents. How much more money does Betty need to buy the wallet?", 
@@ -62,4 +99,7 @@ if __name__ == '__main__':
 
     print (f"input id shape  = {result['input_ids'].shape}")
     print (f"labels shape  = {result['labels'].shape}")
-    print (f"response mask shape  = {result['response_mask'].shape}")
+    print (f"response mask shape  = {result['response_mask'].shape}") #parts of the label that are prompt or padding are masked with 0!
+
+    response_logprobs = get_response_log_probs (model, result["input_ids"], result["labels"], True)
+    print (f"response log probs shape = {response_logprobs['log_probs'].shape}")
