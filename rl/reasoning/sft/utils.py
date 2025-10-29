@@ -49,7 +49,7 @@ def compute_entropy (logits): #logits : [batchsize, seqlen, vocabsize]
     probs = torch.softmax (logits, dim = -1) #[batchsize, seqlen, vocabsize] #p(x)
 
     #below is numerically stable way for logprobs. there is a pytorch way torch.xlogy which computes x*log(y) that handles 0s better!
-    logprobs = logits - torch.logsumexp (logits, dim = -1, keepdim=True) #[batchsize, seqlen, V] <--logsumexp uses math subtraction trick!
+    logprobs = logits - torch.logsumexp (logits, dim = -1, keepdim=True) #[batchsize, seqlen, V] <--logsumexp uses max subtraction trick!
     entropy = -1 * torch.sum ((probs * logprobs), dim = -1) #[batchsize, seqlen]
 
     #logprobs2 = torch.log (probs)
@@ -58,12 +58,16 @@ def compute_entropy (logits): #logits : [batchsize, seqlen, vocabsize]
     return entropy
 
 def get_response_log_probs (model, input_ids, labels, return_token_entropy):
+    '''
+    Returns the logprob of the GT label
+    and optionally the entropy of the token distribution
+    '''
     #Call model on input_ids
     
     logits = model (input_ids).logits #[batchsize, seqlen, vocabsize]
-    agg_logprobs = logits - torch.logsumexp (logits, dim = -1, keepdim=True) #[batchsize, seqlen, V] <--logsumexp uses math subtraction trick!
+    agg_logprobs = logits - torch.logsumexp (logits, dim = -1, keepdim=True) #[batchsize, seqlen, V] <--logsumexp uses max subtraction trick!
     logprobs = torch.gather (agg_logprobs, dim = -1, index = labels.unsqueeze(-1)) #labels made to [b,s,1] . o/p logprobs is [b,s,1]
-    logprobs = logprobs.squeeze (-1)
+    logprobs = logprobs.squeeze (-1) #[b,s]
 
     if return_token_entropy:
         return { "log_probs" : logprobs, "token_entropy" : compute_entropy (logits)}
@@ -79,6 +83,31 @@ def masked_normalize (tensor, mask, normalize_constant, dim): #tensor and mask s
     output = summed_tensor/normalize_constant
     return output
 
+
+def sft_microbatch_train_step (policy_logprobs, response_mask, grad_acc_steps, 
+                               normalize_constant = 1.0):
+    
+    #1. Compute loss from the policy_logprobs + response_mask while normalizing
+    #2. Scale loss [divide by grad_acc_steps]
+    #3. Call loss.backward() to do backprop and store the acc gradient for the model params!
+
+    '''
+    Policy_logprobs has logprob of the ground truth label in vocab
+    CE = 1/n (- Σ p(y) log (p (ŷ)))
+    we have log (p (ŷ) for the GT labels whose p(y) is 1
+    so we need to just negate and average the policy_logprobs while respecting response mask!
+    '''
+
+    agg_loss =  -1*masked_normalize (policy_logprobs, response_mask, normalize_constant, None) #Torch scalar!
+    num_elements_considered = response_mask[response_mask>0]
+    avg_loss = agg_loss/num_elements_considered.sum() #can also do len(num_elements_considered) when mask is {0,1} 
+    
+    #Applying loss scaling
+    avg_loss /= grad_acc_steps
+
+    avg_loss.backward()
+
+    return (avg_loss, None)
 
 
 if __name__ == '__main__':
