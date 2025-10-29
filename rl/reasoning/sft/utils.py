@@ -63,7 +63,7 @@ def get_response_log_probs (model, input_ids, labels, return_token_entropy):
     and optionally the entropy of the token distribution
     '''
     #Call model on input_ids
-    
+
     logits = model (input_ids).logits #[batchsize, seqlen, vocabsize]
     agg_logprobs = logits - torch.logsumexp (logits, dim = -1, keepdim=True) #[batchsize, seqlen, V] <--logsumexp uses max subtraction trick!
     logprobs = torch.gather (agg_logprobs, dim = -1, index = labels.unsqueeze(-1)) #labels made to [b,s,1] . o/p logprobs is [b,s,1]
@@ -74,10 +74,11 @@ def get_response_log_probs (model, input_ids, labels, return_token_entropy):
     return {"log_probs": logprobs} #if we weren't requested entropy!
 
 def masked_normalize (tensor, mask, normalize_constant, dim): #tensor and mask should be same shape!
+    
     masked_tensor = tensor.masked_fill (~mask.bool(), 0)
 
-    summed_tensor = torch.sum (masked_tensor, dim = dim, keepdim=(dim is not None)) 
-    #of shape [...1...] all orig except one being sumed on when dim is not None
+    summed_tensor = torch.sum (masked_tensor, dim = dim, keepdim=False) 
+    #of shape [...,x,...] all orig except one being sumed on which is removed!
     #when dim is None : scalar!
 
     output = summed_tensor/normalize_constant
@@ -99,11 +100,16 @@ def sft_microbatch_train_step (policy_logprobs, response_mask, grad_acc_steps,
     '''
 
     agg_loss =  -1*masked_normalize (policy_logprobs, response_mask, normalize_constant, None) #Torch scalar!
+
+    batch_size = response_mask.shape[0]
     num_elements_considered = response_mask[response_mask>0]
-    avg_loss = agg_loss/num_elements_considered.sum() #can also do len(num_elements_considered) when mask is {0,1} 
-    
+
+    #avg_loss = agg_loss/num_elements_considered.sum() #can also do len(num_elements_considered) when mask is {0,1} 
+    avg_loss = agg_loss/batch_size
+
     #Applying loss scaling
     avg_loss /= grad_acc_steps
+
 
     avg_loss.backward()
 
