@@ -1,5 +1,7 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from torch.utils.data import DataLoader, Subset
+import json
 
 def tokenize_prompt_and_output (prompt_strs, output_strs, tokenizer):
     result = {}
@@ -110,11 +112,39 @@ def sft_microbatch_train_step (policy_logprobs, response_mask, grad_acc_steps,
     #Applying loss scaling
     avg_loss /= grad_acc_steps
 
-
     avg_loss.backward()
 
     return (avg_loss, None)
 
+def readJSONL (filename):
+    data = []
+    with open(filename, "r") as f:
+        for line in f:
+            data.append(json.loads(line))
+    return data
+
+
+
+def log_generations (model, val_set, k, ):
+
+    torch.manual_seed (42)
+
+    indices = torch.randperm(len(val_set))[:k]  # first k indices after random permutation of numbers from 0 to len(val_set)
+    subset = Subset(val_set, indices)
+    val_dataloader = DataLoader (subset, batch_size = 128, shuffle=False, drop_last=True)
+
+
+    for v_batchnum, (X_v, Y_v) in enumerate(val_dataloader):
+        '''
+        1. Call llm.generate() on the batch
+        2. Parse the output
+        3. Call the grader and note accuracy on this batch for diff rewards!
+        4. 
+        5. 
+        '''
+        continue
+
+    return
 
 if __name__ == '__main__':
     model_id = "Qwen/Qwen2.5-Math-1.5B"
