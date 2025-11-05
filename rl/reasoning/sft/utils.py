@@ -101,12 +101,15 @@ def sft_microbatch_train_step (policy_logprobs, response_mask, grad_acc_steps,
     so we need to just negate and average the policy_logprobs while respecting response mask!
     '''
 
+
+
     agg_loss =  -1*masked_normalize (policy_logprobs, response_mask, normalize_constant, None) #Torch scalar!
 
     batch_size = response_mask.shape[0]
     num_elements_considered = response_mask[response_mask>0]
 
     #avg_loss = agg_loss/num_elements_considered.sum() #can also do len(num_elements_considered) when mask is {0,1} 
+    #print (f"Averaging over : {num_elements_considered.sum()}")
     avg_loss = agg_loss/batch_size
 
     #Applying loss scaling

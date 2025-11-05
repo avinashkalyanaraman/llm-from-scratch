@@ -38,7 +38,7 @@ if __name__ == '__main__':
     #Model params!
     model_id = "Qwen/Qwen2.5-Math-1.5B"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, dtype = torch.float16) 
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype = torch.bfloat16) 
                                                  
     if device.type == 'cuda':
         model = torch.compile (model)
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     model.to(device)
 
     #Optimizer
-    optimizer = torch.optim.AdamW ( model.parameters(), lr = 1e-3, betas = (0.9,0.999), eps=1e-8, weight_decay = 1e-2)
+    optimizer = torch.optim.AdamW ( model.parameters(), lr = 1e-4, betas = (0.9,0.999), eps=1e-8, weight_decay = 1e-2)
     #optimizer = torch.optim.SGD(model.parameters(), lr=3e-5) #Test to avoid OOM for optimizer.step()
 
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     #Split the data!
     train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=42)
 
-    train_data = train_data[0:100]
+    train_data = train_data[0:1000]
     val_data = val_data[0:8]
 
     print (f"Train data len = {len(train_data)}")
@@ -87,26 +87,29 @@ if __name__ == '__main__':
     print (f"Train data len = {len(train_data)}")
     print (f"Val data len = {len(val_data)}")
 
-    train_dataloader = DataLoader (train_data, batch_size=1, shuffle=True, drop_last=True)
+    train_dataloader = DataLoader (train_data, batch_size=8, shuffle=True, drop_last=True)
     val_dataloader = DataLoader (val_data, batch_size=1, shuffle=True, drop_last=True)
 
 
     for epoch in range(num_epochs):
-        for itn_num, (X,Y, mask) in enumerate(train_dataloader):
-            print (f"Handling itn-num = {itn_num}")
+        print (f"epoch nunm = {epoch}")
+        for batch_num, (X,Y, mask) in enumerate(train_dataloader):
+            print (f"Handling batch_num = {batch_num} for epoch {epoch}")
             X = X.to(device)
             Y = Y.to(device)
             mask = mask.to(device)
 
 
             #Call the model!
-            response_logprobs = utils.get_response_log_probs (model, X, Y, True)
+            response_logprobs = utils.get_response_log_probs (model, X, Y, False)
             print (f"Obtained logprobs!")
             avg_loss, metadata = utils.sft_microbatch_train_step (response_logprobs['log_probs'], mask, grad_acc_steps, normalize_constant=1.0)
 
+            print (f"observed loss = {avg_loss}")
+
 
             #Run gradient accumulation!
-            if (itn_num + 1) % grad_acc_steps == 0:
+            if (batch_num + 1) % grad_acc_steps == 0:
                 torch.cuda.empty_cache()
                 
                 #Clip Gradients
@@ -116,6 +119,7 @@ if __name__ == '__main__':
                 optimizer.zero_grad(set_to_none=True) #Faster!
                 print ("1 batch done!")
                 print (f"Last observed loss = {avg_loss}")
+                print ("--"*20)
 
             
             #Run validation test
