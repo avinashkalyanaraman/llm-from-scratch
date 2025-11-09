@@ -107,7 +107,7 @@ if __name__ == '__main__' :
     final_file = 'checkpoints/final_model.pt'
 
     # Split the dataset
-    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=True, drop_last=True) #TODO: set shuffle to True for larger mem
+    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=True, drop_last=True, pin_memory=True) #TODO: set shuffle to True for larger mem
     val_dataloader = DataLoader (val_dataset, batch_size=batchsize*2, shuffle=False, drop_last=True)
 
     max_val_steps = val_tokenlimit // (val_dataloader.batch_size * seqlen) #denominator is tokens per step
