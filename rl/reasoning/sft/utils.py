@@ -149,6 +149,17 @@ def log_generations (model, val_set, k, ):
 
     return
 
+def evaluate_model (grader_fn, generations, exp_output_strs):
+    results = []
+
+    for o, solution in zip(generations, exp_output_strs):
+        generation = o.outputs[0].text
+        result = grader_fn (generation, solution)
+        results.append ( (generation, solution, result) )
+
+    return results
+
+
 if __name__ == '__main__':
     model_id = "Qwen/Qwen2.5-Math-1.5B"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
