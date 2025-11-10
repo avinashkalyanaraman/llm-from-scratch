@@ -7,7 +7,9 @@ import sys
 import grader.drgrpo_grader
 from vllm import SamplingParams
 import argparse
+import wandb
 
+IS_WANDB = False
 
 
 '''
@@ -80,8 +82,7 @@ if __name__ == '__main__':
     print (f"Total Dataset size = {len(dataset)}")
 
     #Split the data!
-    train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=42)
-    
+    train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=42)    
     #train_data = train_data[0:1000]
     #val_data = val_data[0:8]
 
@@ -105,13 +106,33 @@ if __name__ == '__main__':
 
     train_data = MyDataset (train_tokenized_result['input_ids'], train_tokenized_result['labels'], train_tokenized_result['response_mask'])
     print (f"Train data len = {len(train_data)}")
-
     train_batch_size = 8
     train_dataloader = DataLoader (train_data, batch_size=train_batch_size, shuffle=True, drop_last=True)
 
 
+    #Setup WandB
+    if IS_WANDB:
+        run = wandb.init(
+            # Set the wandb entity where your project will be logged (generally your team name).
+            entity="avinashkaly-self",
+            # Set the wandb project where this run will be logged.
+            project="llm-from-scratch-sft",
+            # Track hyperparameters and run metadata.
+            config={
+                "learning_rate": learning_rate,
+                "batchsize" : train_batch_size,
+                "grad_acc_steps" : grad_acc_steps,
+                "epochs": num_epochs,
+                "model" : model_id
+            },
+        )
+
+    num_steps = 0
+    losses_since_last_commit = []
+
     for epoch in range(num_epochs):
         print (f"epoch nunm = {epoch}")
+
         for batch_num, (X,Y, mask) in enumerate(train_dataloader):
             print (f"Handling batch_num = {batch_num} for epoch {epoch}")
             X = X.to(device)
@@ -120,16 +141,14 @@ if __name__ == '__main__':
 
             #Call the model!
             response_logprobs = utils.get_response_log_probs (model, X, Y, False)
-            #print (f"Obtained logprobs!")
             avg_loss, metadata = utils.sft_microbatch_train_step (response_logprobs['log_probs'], mask, grad_acc_steps, normalize_constant=1.0)
-
             #print (f"observed loss = {avg_loss}")
+            losses_since_last_commit.append(avg_loss.item())
 
 
             #Run gradient accumulation!
             if (batch_num + 1) % grad_acc_steps == 0:
-                #torch.cuda.empty_cache()
-                
+                #torch.cuda.empty_cache()                
                 #Clip Gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
@@ -138,6 +157,12 @@ if __name__ == '__main__':
                 #print ("1 batch done!")
                 print (f"Last observed loss = {avg_loss}")
                 print ("--"*20)
+                num_steps += 1
+
+        #Write to WANDB every epoch!
+        if IS_WANDB:        
+            run.log ( {"avg_train_loss" : sum(losses_since_last_commit)/len(losses_since_last_commit)}, step = num_steps)
+        losses_since_last_commit = []
 
             
         #Run validation test
@@ -152,12 +177,15 @@ if __name__ == '__main__':
             results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, val_output_strs)
 
             #4. Look at results to compute valdn_acc
-            format_corrects_acc = len(results)*100./len([ele for ele in results if ele['format_reward'] > 0])
-            answer_corrects_acc = len(results)*100./len([ele for ele in results if ele['answer_reward'] > 0])
+            format_corrects_acc = len([ele for ele in results if ele['format_reward'] > 0])*100./len(results)
+            answer_corrects_acc = len([ele for ele in results if ele['answer_reward'] > 0])*100./len(results)
 
             print(f"VALN :: At epoch : {epoch}, the #format corrects = {format_corrects_acc:0.2f}, "
                     f"#answer_corrects = {answer_corrects_acc:0.2f}")
-                
+            
+            if IS_WANDB:
+                run.log( {"format_corrects_acc" : format_corrects_acc}, step = num_steps)
+                run.log( {"answer_corrects_acc" : answer_corrects_acc}, step = num_steps) 
 
     output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
     model.save_pretrained("./sft_model")
