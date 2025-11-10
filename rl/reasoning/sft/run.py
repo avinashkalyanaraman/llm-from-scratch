@@ -89,24 +89,16 @@ if __name__ == '__main__':
     #We only need to pass (valn_)prompts to the VLLM llm.generate() 
     #where it will use the base model's tokenizer
     #and it will tokenize and generate output for us to grade!
-
-    #val_tokenized_result = utils.tokenize_prompt_and_output (val_prompt_strs, val_output_strs , tokenizer)
     
     print (f"Shape of training inputs = {train_tokenized_result['input_ids'].shape}")
-    #print (f"Shape of val inputs = {val_tokenized_result['input_ids'].shape}")
     print ("----"*20)
 
 
     train_data = MyDataset (train_tokenized_result['input_ids'], train_tokenized_result['labels'], train_tokenized_result['response_mask'])
-    #val_data = MyDataset (val_tokenized_result['input_ids'], val_tokenized_result['labels'], val_tokenized_result['response_mask'])
-
     print (f"Train data len = {len(train_data)}")
-    #print (f"Val data len = {len(val_data)}")
 
     train_batch_size = 8
     train_dataloader = DataLoader (train_data, batch_size=train_batch_size, shuffle=True, drop_last=True)
-    #val_dataloader = DataLoader (val_data, batch_size=1, shuffle=True, drop_last=True)
-
 
 
     for epoch in range(num_epochs):
@@ -116,7 +108,6 @@ if __name__ == '__main__':
             X = X.to(device)
             Y = Y.to(device)
             mask = mask.to(device)
-
 
             #Call the model!
             response_logprobs = utils.get_response_log_probs (model, X, Y, False)
