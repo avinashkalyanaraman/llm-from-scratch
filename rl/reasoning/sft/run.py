@@ -141,7 +141,7 @@ if __name__ == '__main__':
 
             
         #Run validation test
-        if (epoch + 1)% 10 == 0:
+        if (epoch + 1)% 2 == 0:
             #1. Copy current-sft weights to VLLMs GPU (device=cuda:1)
             vllm_helper.load_policy_into_vllm_instance (model, vllm_valdn_model)
 
