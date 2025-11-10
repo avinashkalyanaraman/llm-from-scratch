@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 import sys
 import grader.drgrpo_grader
 from vllm import SamplingParams
+import argparse
 
 
 
@@ -32,6 +33,16 @@ class MyDataset(Dataset):
 
 if __name__ == '__main__':
 
+
+    parser = argparse.ArgumentParser(description="Transformer Run")
+    parser.add_argument("--lr", default = 1e-4, type=float, help="Learning Rate")
+    parser.add_argument("--batchsize", type=int, default=1, help="batchsize")
+
+    args = parser.parse_args()
+    learning_rate = args.lr
+    train_batch_size = args.batchsize
+
+
     SEED = 42
 
     data_file = 'data/sft.jsonl'
@@ -52,7 +63,6 @@ if __name__ == '__main__':
         model = torch.compile (model)
 
     #Optimizer
-    learning_rate = 1e-4
     optimizer = torch.optim.AdamW ( model.parameters(), lr = learning_rate, betas = (0.9,0.999), eps=1e-8, weight_decay = 1e-2)
 
     #Load the "base model" onto a separate GPU for validation.
@@ -68,7 +78,6 @@ if __name__ == '__main__':
     #Read the dataset!
     dataset = utils.readJSONL (data_file)
     print (f"Total Dataset size = {len(dataset)}")
-
 
     #Split the data!
     train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=42)
@@ -150,5 +159,5 @@ if __name__ == '__main__':
                     f"#answer_corrects = {answer_corrects_acc:0.2f}")
                 
 
-    output_model_path = f"sft_model_bs{train_batch_size}_lr{learning_rate}"
+    output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
     model.save_pretrained("./sft_model")
