@@ -52,7 +52,8 @@ if __name__ == '__main__':
         model = torch.compile (model)
 
     #Optimizer
-    optimizer = torch.optim.AdamW ( model.parameters(), lr = 1e-4, betas = (0.9,0.999), eps=1e-8, weight_decay = 1e-2)
+    learning_rate = 1e-4
+    optimizer = torch.optim.AdamW ( model.parameters(), lr = learning_rate, betas = (0.9,0.999), eps=1e-8, weight_decay = 1e-2)
 
     #Load the "base model" onto a separate GPU for validation.
     vllm_valdn_model = vllm_helper.init_vllm (model_id, device="cuda:1", seed=SEED)
@@ -102,7 +103,8 @@ if __name__ == '__main__':
     print (f"Train data len = {len(train_data)}")
     #print (f"Val data len = {len(val_data)}")
 
-    train_dataloader = DataLoader (train_data, batch_size=8, shuffle=True, drop_last=True)
+    train_batch_size = 8
+    train_dataloader = DataLoader (train_data, batch_size=train_batch_size, shuffle=True, drop_last=True)
     #val_dataloader = DataLoader (val_data, batch_size=1, shuffle=True, drop_last=True)
 
 
@@ -150,10 +152,12 @@ if __name__ == '__main__':
             results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, val_output_strs)
 
             #4. Look at results to compute valdn_acc
-            format_corrects = len([ele for ele in results if ele['format_reward'] > 0])
-            answer_corrects = len([ele for ele in results if ele['answer_reward'] > 0])
+            format_corrects_acc = len(results)*100./len([ele for ele in results if ele['format_reward'] > 0])
+            answer_corrects_acc = len(results)*100./len([ele for ele in results if ele['answer_reward'] > 0])
 
-            print(f"VALN :: At epoch : {epoch}, the #format corrects = {format_corrects}, "
-                    f"#answer_corrects = {answer_corrects}")
+            print(f"VALN :: At epoch : {epoch}, the #format corrects = {format_corrects_acc:0.2f}, "
+                    f"#answer_corrects = {answer_corrects_acc:0.2f}")
                 
 
+    output_model_path = f"sft_model_bs{train_batch_size}_lr{learning_rate}"
+    model.save_pretrained("./sft_model")
