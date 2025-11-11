@@ -39,7 +39,7 @@ def init_vllm(model_id: str, device: str, seed: int, gpu_memory_utilization: flo
 
 
 #This replaces the already placed "base" mode with a given set of weights!
-def load_policy_into_vllm_instance(policy, llm):
+def load_policy_into_vllm_instance_orig(policy, llm):
     """
     Copied from https://github.com/huggingface/trl/blob/
     22759c820867c8659d00082ba8cf004e963873c1/trl/trainer/grpo_trainer.py#L670.
@@ -48,3 +48,31 @@ def load_policy_into_vllm_instance(policy, llm):
     state_dict = policy.state_dict()
     llm_model = llm.llm_engine.model_executor.driver_worker.model_runner.model
     llm_model.load_weights(state_dict.items())
+
+def load_policy_into_vllm_instance(policy, llm):
+    # HF model weights
+    policy_sd = policy.state_dict()
+
+    # vLLM underlying model
+    vllm_model = llm.llm_engine.model_executor.driver_worker.model_runner.model
+
+    # names vLLM actually has
+    vllm_names = set(n for n, _ in vllm_model.named_parameters())
+    vllm_names.update(n for n, _ in vllm_model.named_buffers())
+
+    filtered = []
+    dropped = []
+    for name, tensor in policy_sd.items():
+        if name in vllm_names:
+            filtered.append((name, tensor))
+        else:
+            dropped.append(name)
+
+    # optional: make sure we only dropped bookkeeping keys
+    unexpected = [k for k in dropped if not k.startswith("_orig_mod")]
+    if unexpected:
+        # this means architectures really differ
+        raise ValueError(f"dropping unexpected keys when loading into vLLM: {unexpected}")
+
+    vllm_model.load_weights(filtered)
+

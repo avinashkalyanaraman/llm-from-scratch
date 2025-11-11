@@ -3,13 +3,15 @@ import utils, vllm_helper
 from sklearn.model_selection import train_test_split
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from torch.utils.data import DataLoader, Dataset
-import sys
+import sys,os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import grader.drgrpo_grader
 from vllm import SamplingParams
 import argparse
 import wandb
 
-IS_WANDB = False
+IS_WANDB = True
+VALN_GRANULARITY = 1
 
 
 '''
@@ -55,7 +57,7 @@ if __name__ == '__main__':
     #Model params!
     model_id = "Qwen/Qwen2.5-Math-1.5B"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, dtype = torch.bfloat16) 
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype = torch.bfloat16)#, attn_implementation="flash_attention_2") 
 
     #SFT-model params!                                           
     #Move model to device
@@ -134,6 +136,7 @@ if __name__ == '__main__':
 
     for epoch in range(num_epochs):
         print (f"epoch nunm = {epoch}")
+        optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples causing the grad-acc if block to not execute and hence not zero-out the gradients.!
 
         for batch_num, (X,Y, mask) in enumerate(train_dataloader):
             print (f"Handling batch_num = {batch_num} for epoch {epoch}")
@@ -157,7 +160,7 @@ if __name__ == '__main__':
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True) #Faster!
                 #print ("1 batch done!")
-                print (f"Last observed loss = {avg_loss}")
+                print (f"Last observed loss for {grad_acc_steps} grad-accumulated {train_batch_size}-batch = {avg_loss}")
                 print ("--"*20)
                 num_steps += 1
 
@@ -168,7 +171,7 @@ if __name__ == '__main__':
 
             
         #Run validation test
-        if (epoch + 1)% 2 == 0:
+        if (epoch + 1)% VALN_GRANULARITY == 0:
             #1. Copy current-sft weights to VLLMs GPU (device=cuda:1)
             vllm_helper.load_policy_into_vllm_instance (model, vllm_valdn_model)
 
@@ -179,8 +182,8 @@ if __name__ == '__main__':
             results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, val_output_strs)
 
             #4. Look at results to compute valdn_acc
-            format_corrects_acc = len([ele for ele in results if ele['format_reward'] > 0])*100./len(results)
-            answer_corrects_acc = len([ele for ele in results if ele['answer_reward'] > 0])*100./len(results)
+            format_corrects_acc = len([ele for ele in results if ele[2]['format_reward'] > 0])*100./len(results)
+            answer_corrects_acc = len([ele for ele in results if ele[2]['answer_reward'] > 0])*100./len(results)
 
             print(f"VALN :: At epoch : {epoch}, the #format corrects = {format_corrects_acc:0.2f}, "
                     f"#answer_corrects = {answer_corrects_acc:0.2f}")
