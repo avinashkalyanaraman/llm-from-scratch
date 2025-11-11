@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Transformer Run")
     parser.add_argument("--lr", default = 1e-4, type=float, help="Learning Rate")
-    parser.add_argument("--batchsize", type=int, default=1, help="batchsize")
+    parser.add_argument("--batchsize", type=int, default=8, help="batchsize")
 
     args = parser.parse_args()
     learning_rate = args.lr
@@ -106,7 +106,6 @@ if __name__ == '__main__':
 
     train_data = MyDataset (train_tokenized_result['input_ids'], train_tokenized_result['labels'], train_tokenized_result['response_mask'])
     print (f"Train data len = {len(train_data)}")
-    train_batch_size = 8
     train_dataloader = DataLoader (train_data, batch_size=train_batch_size, shuffle=True, drop_last=True)
 
 
