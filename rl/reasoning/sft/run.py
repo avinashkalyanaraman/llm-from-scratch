@@ -62,6 +62,9 @@ if __name__ == '__main__':
     model.to(device)
 
     if device.type == 'cuda':
+        # Enable TF32 tensor cores for FP32 matmuls/convs
+        torch.set_float32_matmul_precision("high")
+        
         model = torch.compile (model)
 
     #Optimizer
