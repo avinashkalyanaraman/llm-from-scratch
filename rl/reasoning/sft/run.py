@@ -79,7 +79,7 @@ if __name__ == '__main__':
     sampling_params.include_stop_str_in_output = True #</answer> will be incl. in generation
 
     #Epochs!
-    num_epochs= 10
+    num_epochs= 100
     grad_acc_steps = 8
 
     #Read the dataset!
@@ -191,6 +191,9 @@ if __name__ == '__main__':
             if IS_WANDB:
                 run.log( {"format_corrects_acc" : format_corrects_acc}, step = num_steps)
                 run.log( {"answer_corrects_acc" : answer_corrects_acc}, step = num_steps) 
+            
+            if answer_corrects_acc > 15:
+                break
 
     output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
     model.save_pretrained("./sft_model")
