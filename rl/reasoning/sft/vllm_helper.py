@@ -78,27 +78,44 @@ def load_policy_into_vllm_instance(policy, llm):
     vllm_model.load_weights(filtered)
 
 
-def load_policy_into_vllm_instance2(policy, llm):
-    # 1) unwrap if torch.compile() was applied
+def load_policy_into_vllm_instance2(policy, llm, strict: bool = True):
+
+    # 1) Unwrap if torch.compile() was applied
     base_policy = getattr(policy, "_orig_mod", policy)
 
-    # 2) (optional but helpful) move to CPU to avoid extra VRAM spikes
-    #    and ensure tensors are CPU when handing them to vLLM.
-    #base_policy = base_policy.to("cpu")
-
-    # 3) grab state dict
+    # 2) Get HF state dict (likely on cuda:0)
     sd = base_policy.state_dict()  # keys now match vLLM (no "_orig_mod." prefix)
 
-    # 4) get vLLM model
+    # 3) Get vLLM model (underlying torch.nn.Module)
     vllm_model = llm.llm_engine.model_executor.driver_worker.model_runner.model
 
-    # 5) load (vLLM expects an iterable of (name, tensor))
-    #vllm_model.load_weights((k, v.cpu()) for k, v in sd.items())
+    # 4) Optional: sanity check key overlap
+    vllm_names = {n for n, _ in vllm_model.named_parameters()} | {
+        n for n, _ in vllm_model.named_buffers()
+    }
+
+    missing_in_vllm = [k for k in sd.keys() if k not in vllm_names]
+    extra_in_vllm   = [k for k in vllm_names if k not in sd]
+
+    if strict and missing_in_vllm:
+        raise ValueError(
+            f"[load_policy_into_vllm_instance_gpu] "
+            f"HF policy has keys not found in vLLM (showing up to 10): {missing_in_vllm[:10]}"
+        )
+
+    if extra_in_vllm:
+        # Just informational — vLLM can have a few extras (e.g., KV cache metadata)
+        print(
+            "[load_policy_into_vllm_instance_gpu] "
+            "NOTE: vLLM has extra keys not in HF policy (showing up to 10):",
+            extra_in_vllm[:10],
+        )
+
+    # 5) Actually load weights (tensors stay on GPU, e.g., cuda:0 → sharded GPUs via vLLM)
+    #    vLLM expects an iterable of (name, tensor)
     vllm_model.load_weights(sd.items())
 
-
-    #Sanity check if copy was okay!
-    vllm_names = {n for n, _ in vllm_model.named_parameters()} | {n for n, _ in vllm_model.named_buffers()}
-    missing = [k for k in sd.keys() if k not in vllm_names]
-    assert not missing, f"Missing in vLLM: {missing[:10]}"
-
+    print(
+        f"[load_policy_into_vllm_instance_gpu] Loaded {len(sd)} tensors from HF policy "
+        "into vLLM model."
+    )
