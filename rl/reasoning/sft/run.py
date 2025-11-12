@@ -195,5 +195,8 @@ if __name__ == '__main__':
             if answer_corrects_acc > 15:
                 break
 
-    output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
-    model.save_pretrained(output_model_path)
+            output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
+            model.save_pretrained(output_model_path)
+
+    #output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
+    #model.save_pretrained(output_model_path)
