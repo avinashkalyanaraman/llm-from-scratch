@@ -196,4 +196,4 @@ if __name__ == '__main__':
                 break
 
     output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
-    model.save_pretrained("./sft_model")
+    model.save_pretrained(output_model_path)
