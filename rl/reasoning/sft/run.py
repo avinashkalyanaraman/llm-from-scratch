@@ -192,11 +192,14 @@ if __name__ == '__main__':
                 run.log( {"format_corrects_acc" : format_corrects_acc}, step = num_steps)
                 run.log( {"answer_corrects_acc" : answer_corrects_acc}, step = num_steps) 
             
+            output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
+            model.save_pretrained(output_model_path)
+            tokenizer.save_pretrained(output_model_path)
+            
             if answer_corrects_acc > 15:
                 break
 
-            output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
-            model.save_pretrained(output_model_path)
+
 
     #output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
     #model.save_pretrained(output_model_path)
