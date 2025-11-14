@@ -2,7 +2,7 @@ from vllm import SamplingParams
 import utils, vllm_helper
 from sklearn.model_selection import train_test_split
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+import pickle
 
 import sys,os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,6 +10,10 @@ import grader.drgrpo_grader
 
 
 if __name__ == '__main__':
+
+    IS_FILTERING = False
+    DATASET_TYPE = 'validn'
+    assert DATASET_TYPE in ['train', 'validn']
 
     SEED = 42
 
@@ -46,13 +50,22 @@ if __name__ == '__main__':
     val_prompt_strs = [ele['prompt'] for ele in val_data]
     val_output_strs = [ele['response'] for ele in val_data]
 
+    if DATASET_TYPE == 'train':
+        prompt_strs = train_prompt_strs
+        output_strs = train_output_strs
+    elif DATASET_TYPE == 'validn':
+        prompt_strs = val_prompt_strs
+        output_strs = val_output_strs
+    else:
+        assert False , "DATASET_TYPE not in a desired format"
+
 
     try :
         #2 Run generation on it with given validation prompts
-        outputs = vllm_valdn_model.generate(val_prompt_strs, sampling_params)
+        outputs = vllm_valdn_model.generate(prompt_strs, sampling_params)
 
         #3.Grade and see what is our validation result!
-        results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, val_output_strs)
+        results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, output_strs)
 
         #4. Look at results to compute valdn_acc
         format_corrects_acc = len([ele for ele in results if ele[2]['format_reward'] > 0])*100./len(results)
@@ -60,6 +73,13 @@ if __name__ == '__main__':
 
         print(f"VALN :: The #format corrects = {format_corrects_acc:0.2f}, "
                 f"#answer_corrects = {answer_corrects_acc:0.2f}")
+        
+        #This is for filtering the right indices to sft on only the correct answers!
+        correct_answers_indices = [ii for ii, ele in enumerate(results) if ele[2]['answer_reward'] > 0]
+
+        if IS_FILTERING:
+            with open("data/correct_answers_indices.pkl", "wb") as f:
+                pickle.dump(correct_answers_indices, f)
     
     finally :
         del vllm_valdn_model
