@@ -12,12 +12,11 @@ import grader.drgrpo_grader
 if __name__ == '__main__':
 
     IS_FILTERING = False
-    DATASET_TYPE = 'validn'
-    assert DATASET_TYPE in ['train', 'validn']
+
 
     SEED = 42
 
-    data_file = 'data/sft.jsonl'
+    data_file = 'data/sft_train.jsonl'
     torch.manual_seed (SEED)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -37,28 +36,10 @@ if __name__ == '__main__':
     dataset = utils.readJSONL (data_file)
     print (f"Total Dataset size = {len(dataset)}")
 
-    #Split the data!
-    train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=42)    
-    #train_data = train_data[0:1000]
-    #val_data = val_data[0:8]
 
-    print (f"Train data len = {len(train_data)}")
-    print (f"Val data len = {len(val_data)}")
+    prompt_strs = [ele['prompt'] for ele in dataset]
+    output_strs = [ele['response'] for ele in dataset]
     
-    train_prompt_strs = [ele['prompt'] for ele in train_data]
-    train_output_strs = [ele['response'] for ele in train_data]
-    val_prompt_strs = [ele['prompt'] for ele in val_data]
-    val_output_strs = [ele['response'] for ele in val_data]
-
-    if DATASET_TYPE == 'train':
-        prompt_strs = train_prompt_strs
-        output_strs = train_output_strs
-    elif DATASET_TYPE == 'validn':
-        prompt_strs = val_prompt_strs
-        output_strs = val_output_strs
-    else:
-        assert False , "DATASET_TYPE not in a desired format"
-
 
     try :
         #2 Run generation on it with given validation prompts
