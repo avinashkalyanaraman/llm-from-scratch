@@ -207,5 +207,6 @@ if __name__ == '__main__':
 
 
 
-    #output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
-    #model.save_pretrained(output_model_path)
+    output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
+    model.save_pretrained(output_model_path)
+    tokenizer.save_pretrained(output_model_path)
