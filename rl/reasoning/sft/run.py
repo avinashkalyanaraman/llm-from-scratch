@@ -102,7 +102,7 @@ if __name__ == '__main__':
     sampling_params.include_stop_str_in_output = True #</answer> will be incl. in generation
 
     #Epochs!
-    num_epochs= 10
+    num_epochs= 15
     grad_acc_steps = 8
 
     #Read the dataset!
@@ -165,7 +165,7 @@ if __name__ == '__main__':
         optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples causing the grad-acc if block to not execute and hence not zero-out the gradients.!
 
         for batch_num, (X,Y, mask) in enumerate(train_dataloader):
-            print (f"Handling batch_num = {batch_num} for epoch {epoch}")
+            #print (f"Handling batch_num = {batch_num} for epoch {epoch}")
             X = X.to(device)
             Y = Y.to(device)
             mask = mask.to(device)
@@ -186,7 +186,7 @@ if __name__ == '__main__':
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True) #Faster!
                 #print ("1 batch done!")
-                print (f"Last observed loss for {grad_acc_steps} grad-accumulated {train_batch_size}-batch = {avg_loss}")
+                print (f"Last observed loss in batch# {batch_num} for {grad_acc_steps} grad-accumulated {train_batch_size}-batch = {avg_loss}")
                 print ("--"*20)
                 num_steps += 1
 
