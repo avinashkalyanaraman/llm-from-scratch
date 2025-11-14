@@ -108,15 +108,10 @@ if __name__ == '__main__':
     num_epochs= 15
     grad_acc_steps = 16 
 
-    #Read the dataset!
-    dataset = utils.readJSONL (data_file)
-    print (f"Total Dataset size = {len(dataset)}")
 
     train_data = utils.readJSONL (train_data_file)
     val_data = utils.readJSONL (valdn_data_file)
 
-    #Split the data!
-    train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=SEED)    
     #train_data = train_data[0:1000]
     #val_data = val_data[0:8]
 
