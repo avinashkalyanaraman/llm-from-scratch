@@ -37,7 +37,7 @@ class MyDataset(Dataset):
 
 def runValidation(model, vllm_valdn_model, val_prompt_strs, val_output_strs, sampling_params, IS_WANDB, epoch, num_steps):
     #1. Copy current-sft weights to VLLMs GPU (device=cuda:1)
-    vllm_helper.load_policy_into_vllm_instance (model, vllm_valdn_model)
+    vllm_helper.load_policy_into_vllm_instance_orig (model, vllm_valdn_model)
 
     #2 Run generation on it with given validation prompts
     outputs = vllm_valdn_model.generate(val_prompt_strs, sampling_params)
@@ -89,8 +89,7 @@ if __name__ == '__main__':
     if device.type == 'cuda':
         # Enable TF32 tensor cores for FP32 matmuls/convs
         torch.set_float32_matmul_precision("high")
-        
-        model = torch.compile (model)
+        #model = torch.compile (model)
 
     #Optimizer
     optimizer = torch.optim.AdamW ( model.parameters(), lr = learning_rate, betas = (0.9,0.999), eps=1e-8, weight_decay = 1e-2)
