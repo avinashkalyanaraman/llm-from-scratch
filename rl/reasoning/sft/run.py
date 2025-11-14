@@ -64,15 +64,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Transformer Run")
     parser.add_argument("--lr", default = 1e-4, type=float, help="Learning Rate")
     parser.add_argument("--batchsize", type=int, default=4, help="batchsize")
+    parser.add_argument("--tfile", type=str, default="data/sft_train.jsonl", help="file to be used as training")
+    parser.add_argument("--vfile", type=str, default="data/sft_valdn.jsonl", help="file to be used for validation")
+
 
     args = parser.parse_args()
     learning_rate = args.lr
     train_batch_size = args.batchsize
+    train_data_file = args.tfile
+    valdn_data_file = args.vfile
 
 
     SEED = 42
 
-    data_file = 'data/sft.jsonl'
     torch.manual_seed (SEED)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
@@ -107,6 +111,9 @@ if __name__ == '__main__':
     #Read the dataset!
     dataset = utils.readJSONL (data_file)
     print (f"Total Dataset size = {len(dataset)}")
+
+    train_data = utils.readJSONL (train_data_file)
+    val_data = utils.readJSONL (valdn_data_file)
 
     #Split the data!
     train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=SEED)    

@@ -4,9 +4,7 @@ This code reads a parent jsonl file, and
     (ii) Writes train to _train.jsonl and validn to _valdn.jsonl
 '''
 
-import json
 from sklearn.model_selection import train_test_split
-import torch
 import utils
 
 
