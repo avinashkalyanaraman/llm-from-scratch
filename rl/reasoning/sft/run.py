@@ -35,6 +35,29 @@ class MyDataset(Dataset):
         return self.x.shape[0]
 
 
+def runValidation(model, vllm_valdn_model, val_prompt_strs, val_output_strs, sampling_params, IS_WANDB, epoch, num_steps):
+    #1. Copy current-sft weights to VLLMs GPU (device=cuda:1)
+    vllm_helper.load_policy_into_vllm_instance2 (model, vllm_valdn_model)
+
+    #2 Run generation on it with given validation prompts
+    outputs = vllm_valdn_model.generate(val_prompt_strs, sampling_params)
+
+    #3.Grade and see what is our validation result!
+    results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, val_output_strs)
+
+    #4. Look at results to compute valdn_acc
+    format_corrects_acc = len([ele for ele in results if ele[2]['format_reward'] > 0])*100./len(results)
+    answer_corrects_acc = len([ele for ele in results if ele[2]['answer_reward'] > 0])*100./len(results)
+
+    print(f"VALN :: At epoch : {epoch}, the #format corrects = {format_corrects_acc:0.2f}, "
+            f"#answer_corrects = {answer_corrects_acc:0.2f}")
+    
+    if IS_WANDB:
+        run.log( {"format_corrects_acc" : format_corrects_acc}, step = num_steps)
+        run.log( {"answer_corrects_acc" : answer_corrects_acc}, step = num_steps)
+
+
+
 if __name__ == '__main__':
 
 
@@ -79,7 +102,7 @@ if __name__ == '__main__':
     sampling_params.include_stop_str_in_output = True #</answer> will be incl. in generation
 
     #Epochs!
-    num_epochs= 100
+    num_epochs= 10
     grad_acc_steps = 8
 
     #Read the dataset!
@@ -134,6 +157,9 @@ if __name__ == '__main__':
     num_steps = 0
     losses_since_last_commit = []
 
+    #Logging before SFT!
+    runValidation(model, vllm_valdn_model, val_prompt_strs, val_output_strs, sampling_params, IS_WANDB, -1, num_steps) 
+
     for epoch in range(num_epochs):
         print (f"epoch nunm = {epoch}")
         optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples causing the grad-acc if block to not execute and hence not zero-out the gradients.!
@@ -172,32 +198,13 @@ if __name__ == '__main__':
             
         #Run validation test
         if (epoch + 1)% VALN_GRANULARITY == 0:
-            #1. Copy current-sft weights to VLLMs GPU (device=cuda:1)
-            vllm_helper.load_policy_into_vllm_instance2 (model, vllm_valdn_model)
 
-            #2 Run generation on it with given validation prompts
-            outputs = vllm_valdn_model.generate(val_prompt_strs, sampling_params)
-
-            #3.Grade and see what is our validation result!
-            results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, val_output_strs)
-
-            #4. Look at results to compute valdn_acc
-            format_corrects_acc = len([ele for ele in results if ele[2]['format_reward'] > 0])*100./len(results)
-            answer_corrects_acc = len([ele for ele in results if ele[2]['answer_reward'] > 0])*100./len(results)
-
-            print(f"VALN :: At epoch : {epoch}, the #format corrects = {format_corrects_acc:0.2f}, "
-                    f"#answer_corrects = {answer_corrects_acc:0.2f}")
-            
-            if IS_WANDB:
-                run.log( {"format_corrects_acc" : format_corrects_acc}, step = num_steps)
-                run.log( {"answer_corrects_acc" : answer_corrects_acc}, step = num_steps) 
+            runValidation(model, vllm_valdn_model, val_prompt_strs, val_output_strs, sampling_params, IS_WANDB, epoch, num_steps) 
             
             output_model_path = f"sft_model_bs{train_batch_size*grad_acc_steps}_lr{learning_rate}"
             model.save_pretrained(output_model_path)
             tokenizer.save_pretrained(output_model_path)
             
-            if answer_corrects_acc > 15:
-                break
 
 
 
