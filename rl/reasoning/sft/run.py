@@ -109,7 +109,7 @@ if __name__ == '__main__':
     print (f"Total Dataset size = {len(dataset)}")
 
     #Split the data!
-    train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=42)    
+    train_data, val_data = train_test_split(dataset, test_size=0.2, random_state=SEED)    
     #train_data = train_data[0:1000]
     #val_data = val_data[0:8]
 

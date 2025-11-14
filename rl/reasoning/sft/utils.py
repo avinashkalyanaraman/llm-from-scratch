@@ -126,6 +126,10 @@ def readJSONL (filename):
             data.append(json.loads(line))
     return data
 
+def writeJSONL(path, data_list):
+    with open(path, "w", encoding="utf-8") as f:
+        for item in data_list:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
 
 def log_generations (model, val_set, k, ):

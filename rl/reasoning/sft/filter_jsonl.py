@@ -12,9 +12,9 @@ import json
 
 if __name__ == '__main__':
 
-    input_file = '../data/sft.jsonl'
-    pickle_file = '../data/correct_answers_indices.pkl'
-    output_file = '../data/sft_filtered.jsonl'
+    input_file = 'data/sft.jsonl'
+    pickle_file = 'data/correct_answers_indices.pkl'
+    output_file = 'data/sft_filtered.jsonl'
 
     # 1. Read the pickle file (list of line numbers to keep)
     with open(pickle_file, "rb") as f:
