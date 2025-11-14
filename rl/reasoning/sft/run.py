@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Transformer Run")
     parser.add_argument("--lr", default = 1e-4, type=float, help="Learning Rate")
-    parser.add_argument("--batchsize", type=int, default=8, help="batchsize")
+    parser.add_argument("--batchsize", type=int, default=4, help="batchsize")
 
     args = parser.parse_args()
     learning_rate = args.lr
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     data_file = 'data/sft.jsonl'
     torch.manual_seed (SEED)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
     #Model params!
     model_id = "Qwen/Qwen2.5-Math-1.5B"
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
     #Epochs!
     num_epochs= 15
-    grad_acc_steps = 8
+    grad_acc_steps = 16 
 
     #Read the dataset!
     dataset = utils.readJSONL (data_file)
