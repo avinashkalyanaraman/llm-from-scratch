@@ -87,3 +87,19 @@ def masked_mean(tensor, mask, dim = None):
     mean_mask_compliant_tensor = sum_mask_compliant_tensor / num_ones_per_dim_in_mask
 
     return mean_mask_compliant_tensor
+
+def grpo_microbatch_train_step( policy_log_probs, response_mask, gradient_accumulation_steps,
+                               loss_type, raw_rewards, advantages, old_log_probs, cliprange):
+        
+
+        per_token_loss, metadata = compute_policy_gradient_loss (policy_log_probs, loss_type, raw_rewards, advantages, 
+                                      old_log_probs, cliprange)
+        
+        #Let us ignore loss computation on the padding tokens!
+        per_token_loss = masked_mean (per_token_loss, response_mask)
+
+        mean_per_token_loss = torch.mean (per_token_loss, dim = 0) #Scalar . dim=0 is batch dim
+        mean_per_token_loss = mean_per_token_loss / gradient_accumulation_steps #gradient accumulation!
+
+        mean_per_token_loss.backward()
+        return mean_per_token_loss, metadata
