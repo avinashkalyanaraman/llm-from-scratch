@@ -66,3 +66,24 @@ def compute_grpo_clip_loss (advantages, policy_log_probs, old_log_probs, clipran
     #[B,S] : each elem is true if clipped, false otherwise!
 
     return -loss, {'isclip':mask}
+
+def compute_policy_gradient_loss (policy_log_probs, loss_type, raw_rewards = None,
+                                  advantages = None, old_log_probs = None, cliprange = 0.0):
+    
+    if loss_type == 'no_baseline':
+        return compute_naive_policy_gradient_loss (raw_rewards, policy_log_probs) , {}
+    elif loss_type == 'reinforce_with_baseline':
+        return compute_naive_policy_gradient_loss (advantages, policy_log_probs), {}
+    elif loss_type == 'grpo_clip':
+        return compute_grpo_clip_loss (advantages, policy_log_probs, old_log_probs, cliprange)
+    else: #bad loss_type
+        assert False , "Incorrect loss type!"
+
+def masked_mean(tensor, mask, dim = None):
+
+    mask_compliant_tensor = tensor * mask 
+    sum_mask_compliant_tensor = torch.sum (mask_compliant_tensor, dim = dim)
+    num_ones_per_dim_in_mask = torch.sum(mask, dim = dim)
+    mean_mask_compliant_tensor = sum_mask_compliant_tensor / num_ones_per_dim_in_mask
+
+    return mean_mask_compliant_tensor
