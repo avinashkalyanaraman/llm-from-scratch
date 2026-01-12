@@ -1,4 +1,5 @@
 import torch
+import json
 
 def compute_group_normalized_rewards (reward_fn, rollout_responses, repeated_ground_truths,
                                       group_size, advantage_eps, normalize_by_std):
@@ -103,3 +104,10 @@ def grpo_microbatch_train_step( policy_log_probs, response_mask, gradient_accumu
 
         mean_per_token_loss.backward()
         return mean_per_token_loss, metadata
+
+def readJSONL (filename):
+    data = []
+    with open(filename, "r") as f:
+        for line in f:
+            data.append(json.loads(line))
+    return data
