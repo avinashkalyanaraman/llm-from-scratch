@@ -134,9 +134,19 @@ if __name__ == '__main__':
         #We take the sampled_train_prompt_strs and pass it through vllm!
         outputs = vllm_gen_model.generate(sampled_train_prompt_strs, sampling_params)
 
-        print (f"# of outputs = {len(outputs)}")
-        print (f"outputs first 5 = {outputs[:5]}")
+        all_completions = [c.text for req in outputs for c in req.outputs]
+        print (f"Total # of generations = {len(all_completions)}")
 
+        #Get the rewards
+        #Repeated ground truth
+        agg_sampled_train_output_strs= [ele for ele in sampled_train_output_strs for _ in range(group_size)]        
+        assert len(all_completions) == len(agg_sampled_train_output_strs)
+        adv_rewards, agg_rewards, _ = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
+                                                          all_completions, agg_sampled_train_output_strs,
+                                                          group_size, advantage_eps, is_std_norm) #[B,]
+
+        #Get the logprobs that is 0-padded, and the corresponding response mask with mask 0 for pads 
+        logprob_matrix, logprob_response_mask = utils.getVLLMLogProbMatrix (outputs) #[B*G, max_output_token_len]
 
 
         #TODO

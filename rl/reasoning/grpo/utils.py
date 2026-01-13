@@ -111,3 +111,39 @@ def readJSONL (filename):
         for line in f:
             data.append(json.loads(line))
     return data
+
+def getVLLMLogProbMatrix (outputs):
+
+    agg_logprobs = []
+    generation_lens = []
+
+    for req in outputs: #for each prompt
+        for gen in req.outputs : # for each generation within it
+            logprobs = gen.logprobs #the logprobs from vllm for this generation
+            logprobs = [list(ele.values())[0] for ele in logprobs] #get the top-token's logprob value!
+            agg_logprobs.append (torch.tensor (logprobs))
+            generation_lens.append (len(logprobs)) #the length of the output generation!
+    
+    max_gen_len = max(generation_lens)
+    agg_mask_tensor = torch.zeros ( len (generation_lens), max_gen_len)
+    for gen_num, g_len in enumerate (generation_lens):
+        agg_mask_tensor[gen_num, :g_len] = 1
+
+    
+    agg_logprobs_tensor = torch.nn.utils.rnn.pad_sequence (agg_logprobs, 
+                                                           batch_first=True, 
+                                                           padding_value=0)
+
+    return agg_logprobs_tensor, agg_mask_tensor
+
+
+def evaluate_model (grader_fn, generations, exp_output_strs):
+    results = []
+
+    for o, solution in zip(generations, exp_output_strs):
+        for gen_num in range(len(o.outputs)): #iterate through each generation for the i/p prompt!
+            generation = o.outputs[gen_num].text
+            result = grader_fn (generation, solution)
+            results.append ( (generation, solution, result) )
+
+    return results
