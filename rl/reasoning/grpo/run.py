@@ -309,8 +309,8 @@ if __name__ == '__main__':
         #Run validation!
         _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, sampling_params) 
         format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
-        wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, -1, IS_WANDB)
-        wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, -1, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, on_policy_step, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, on_policy_step, IS_WANDB)
 
 
         
