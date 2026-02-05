@@ -148,11 +148,9 @@ def getVLLMLogProbMatrix (outputs):
 def evaluate_model (grader_fn, generations, exp_output_strs):
     results = []
 
-    for o, solution in zip(generations, exp_output_strs):
-        for gen_num in range(len(o.outputs)): #iterate through each generation for the i/p prompt!
-            generation = o.outputs[gen_num].text
-            result = grader_fn (generation, solution)
-            results.append ( (generation, solution, result) )
+    for generation, solution in zip(generations, exp_output_strs):
+        result = grader_fn (generation, solution)
+        results.append ( (generation, solution, result) )
 
     return results
 
