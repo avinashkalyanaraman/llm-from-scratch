@@ -24,6 +24,10 @@ def compute_group_normalized_rewards (reward_fn, rollout_responses, repeated_gro
     agg_rewards = torch.tensor (agg_rewards)
     agg_rewards = agg_rewards.view (num_batches, group_size) #[B, G]
 
+    #But we still compute and return those rewards for logging!
+    agg_format_rewards = torch.tensor (agg_format_rewards)
+    agg_answer_rewards = torch.tensor (agg_answer_rewards)
+
     #The actual group-norm!
     mean_rewards = torch.mean(agg_rewards, dim = -1, keepdim=True) #[B,1]
     adv_rewards = agg_rewards - mean_rewards #[B,G]
@@ -34,8 +38,10 @@ def compute_group_normalized_rewards (reward_fn, rollout_responses, repeated_gro
 
     adv_rewards = adv_rewards.view (len(rollout_responses)) #[B*G]
     agg_rewards = agg_rewards.view (len(rollout_responses)) #[B*G] ; the raw unnormalized reward!
+    agg_format_rewards = agg_format_rewards.view (len(rollout_responses)) #[B*G] ; the raw format reward for each rollout
+    agg_answer_rewards = agg_answer_rewards.view (len(rollout_responses)) #[B*G] ; the raw answer reward for each rollout
 
-    return adv_rewards, agg_rewards, {}
+    return adv_rewards, agg_rewards, {'agg_format_rewards' : agg_format_rewards, 'agg_answer_rewards' : agg_answer_rewards}
 
 
 def compute_naive_policy_gradient_loss (raw_rewards_or_advantages, policy_log_probs):

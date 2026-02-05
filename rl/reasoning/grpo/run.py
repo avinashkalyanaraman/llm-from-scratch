@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader, Dataset
-import utils
+import utils, wandb_utils
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -34,6 +34,22 @@ class MyDataset(Dataset):
     
     def __len__(self):
         return self.x.shape[0]
+
+def runVLLMGeneration( vllm_valdn_model, prompt_strs, sampling_params):
+
+    #We take the sampled_train_prompt_strs and pass it through vllm!
+    vllm_output = vllm_gen_model.generate(prompt_strs, sampling_params)
+    all_completions = [c.text for req in vllm_output for c in req.outputs]
+    return vllm_output, all_completions
+
+def getRewardsAcc (outputs, gt_outputs):
+
+    results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, gt_outputs, outputs)
+
+    format_corrects_acc = len([ele for ele in results if ele[2]['format_reward'] > 0])*100./len(results)
+    answer_corrects_acc = len([ele for ele in results if ele[2]['answer_reward'] > 0])*100./len(results)
+
+    return format_corrects_acc, answer_corrects_acc
 
 
 if __name__ == '__main__':
@@ -108,11 +124,10 @@ if __name__ == '__main__':
     #Move model to device
     policy.to(device)
 
-    if device.type == 'cuda':
-        # Enable TF32 tensor cores for FP32 matmuls/convs
-        torch.set_float32_matmul_precision("high")
-        #policy = torch.compile (policy)
-    
+    assert device.type == 'cuda', 'Built to run on cuda device type'
+    # Enable TF32 tensor cores for FP32 matmuls/convs
+    torch.set_float32_matmul_precision("high")
+
 
     #Optimizer
     optimizer = torch.optim.AdamW ( policy.parameters(), lr = learning_rate, betas = (0.9,0.95), eps=1e-8, weight_decay = 0.0)
@@ -126,6 +141,9 @@ if __name__ == '__main__':
         seed = SEED, logprobs = 1)
     sampling_params.include_stop_str_in_output = True #</answer> will be incl. in generation
 
+    #Copy current policy weights to VLLMs GPU (device=cuda:1)
+    vllm_helper.load_policy_into_vllm_instance_orig (policy, vllm_gen_model)
+
 
     #Lets us read the training and validn data files!
     train_data = utils.readJSONL (train_data_file)
@@ -136,11 +154,39 @@ if __name__ == '__main__':
     '''
     train_prompt_strs = [ele['prompt'] for ele in train_data]
     train_output_strs = [ele['response'] for ele in train_data]
+    '''
     val_prompt_strs = [ele['prompt'] for ele in val_data]
     val_output_strs = [ele['response'] for ele in val_data]
-    '''
+
+
+    #Setup WandB
+    if IS_WANDB:
+        run = wandb.init(
+            # Set the wandb entity where your project will be logged (generally your team name).
+            entity="avinashkaly-self",
+            # Set the wandb project where this run will be logged.
+            project="llm-from-scratch-rlvr",
+            # Track hyperparameters and run metadata.
+            config={
+                "learning_rate": learning_rate,
+                "batchsize" : train_batch_size,
+                "grad_acc_steps" : gradient_acc_steps,
+                "n_grpo_steps": n_grpo_steps,
+                "group_size" : group_size,
+                "epochs_per_rollout_batch" : epochs_per_rollout_batch,
+                "model" : model_id,
+                "loss_type" : loss_type
+            },
+        )
 
     num_steps = 0
+
+
+    #Logging before RLVR!
+    _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, sampling_params) 
+    format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
+    wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, -1, IS_WANDB)
+    wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, -1, IS_WANDB)
 
     for on_policy_step in range(n_grpo_steps):
 
@@ -148,27 +194,23 @@ if __name__ == '__main__':
         sampled_train_prompt_strs, sampled_train_output_strs = utils.sampleTrainingData (train_data, num_training_samples)
 
         #We take the sampled_train_prompt_strs and pass it through vllm!
-        vllm_output = vllm_gen_model.generate(sampled_train_prompt_strs, sampling_params)
-
-        all_completions = [c.text for req in vllm_output for c in req.outputs]
+        vllm_output, all_completions = runVLLMGeneration (vllm_gen_model, sampled_train_prompt_strs, sampling_params)
         print (f"Total # of generations = {len(all_completions)}")
 
         #Get the rewards for the generations
         #Repeated ground truth
         agg_sampled_train_output_strs= [ele for ele in sampled_train_output_strs for _ in range(group_size)] #Len = B*G
         assert len(all_completions) == len(agg_sampled_train_output_strs)
-        adv_rewards, agg_rewards, _ = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
+        adv_rewards, agg_rewards, rewards_metadata = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
                                                           all_completions, agg_sampled_train_output_strs,
                                                           group_size, advantage_eps, is_std_norm) #[B*G,]
+        
+        wandb_utils.logToWANDB (run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item(), on_policy_step, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item(), on_policy_step, IS_WANDB)
+
 
         #Get the logprobs that is 0-padded, and the corresponding response mask with mask 0 for pads 
         logprob_matrix, logprob_response_mask = utils.getVLLMLogProbMatrix (vllm_output) #[B*G, max_output_token_len]
-
-        '''
-        #Repeated prompts
-        agg_sampled_train_prompt_strs = [ele for ele in sampled_train_prompt_strs for _ in range(group_size)] 
-        assert len(all_completions) == len(agg_sampled_train_output_strs) #len = B*G
-        '''
 
         #list where each element is two lists -- prompt tokens and compln tokens
         prompt_compln_tokenpairs = [ (ele1.prompt_token_ids,  ele2.token_ids) for ele1 in vllm_output for ele2 in ele1.outputs]        
@@ -187,6 +229,8 @@ if __name__ == '__main__':
         off_policy_train_dataloader = DataLoader (off_policy_train_data, batch_size=microbatchsize_train, shuffle=True, drop_last=True)
 
         for off_policy_train_step in range (epochs_per_rollout_batch):
+            losses_since_last_commit = [] #Aggregating losses here to log for every off_policy_train_step!
+
             optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples
             #causing the grad-acc if block to not execute and hence not zero-out the gradients.!
             
@@ -214,20 +258,59 @@ if __name__ == '__main__':
                 mean_per_token_loss, metadata = utils.grpo_microbatch_train_step( adj_response_logprobs, mub_logprob_resp_mask, gradient_acc_steps,
                                loss_type, mub_agg_rewards, mub_adv_rewards, mub_logprob_matrix, advantage_eps)
 
-            
+                losses_since_last_commit.append(mean_per_token_loss.item())
+
                 if (off_policy_batchnum + 1) % gradient_acc_steps == 0:
 
-                    #Clip Gradients
-                    torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
+                    #Clipping Gradients and reporting it
+                    max_norm = 1.0
+                    preclip_norm = torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm)
+                    clipped_norm = torch.sqrt(sum(p.grad.norm()**2 for p in policy.parameters() if p.grad is not None))
+                    clip_fraction = float (preclip_norm > max_norm)
+                    wandb_utils.logDictToWANDB (run, {'preclip_norm': preclip_norm, 'clipped_norm' : clipped_norm, 'clip_fraction' : clip_fraction}, num_steps, IS_WANDB)
+
 
                     optimizer.step()
                     optimizer.zero_grad(set_to_none=True) #Faster
 
                     num_steps += 1
 
+                    #For every optimizer update, we will write the loss to wandb!
+                    #TODO:  Write loss, grad_norm, clipping fraction and token entropy!
+                    #1. reporting the loss
+                    wandb_utils.logToWANDB (run, 'train_loss_per_opt_update', mean_per_token_loss.item(), num_steps, IS_WANDB)
+                    
+
             
+            # We will also write training accuracy and valdn accuracy.
+            # Note that training accuracy is on a set of samples that varies every epoch!
+            wandb_utils.logToWANDB (run, 'avg_train_loss', sum(losses_since_last_commit)/len(losses_since_last_commit), num_steps, IS_WANDB)
+            losses_since_last_commit = [] #Resetting this list to accumulate losses for next epoch!
+            
+        #TODO: Run and report training & validation accuracy at the end of every epoch after copying weights to vllm model!
+        vllm_helper.load_policy_into_vllm_instance_orig (policy, vllm_gen_model)
+
+        #Rerun on training set and see how the accuracy has changed!
+        _, all_completions = runVLLMGeneration (vllm_gen_model, sampled_train_prompt_strs, sampling_params)
+        print (f"Total # of generations while rerunning on training set post off-policy update = {len(all_completions)}")
+
+        #Get the rewards for the generations
+        #Repeated ground truth
+        adv_rewards, agg_rewards, rewards_metadata = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
+                                                          all_completions, agg_sampled_train_output_strs,
+                                                          group_size, advantage_eps, is_std_norm) #[B*G,]        
 
 
-    #Copy current policy weights to VLLMs GPU (device=cuda:1)
-    vllm_helper.load_policy_into_vllm_instance_orig (policy, vllm_gen_model)
+        
+        wandb_utils.logToWANDB (run, 'agg_format_rewards [post off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item(), on_policy_step, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'agg_answer_rewards [post off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item(), on_policy_step, IS_WANDB)
+
+
+        #Run validation!
+        _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, sampling_params) 
+        format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
+        wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, -1, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, -1, IS_WANDB)
+
+
         
