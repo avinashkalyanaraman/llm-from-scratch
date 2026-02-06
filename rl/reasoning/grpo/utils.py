@@ -100,6 +100,16 @@ def masked_mean(tensor, mask, dim = None):
 def grpo_microbatch_train_step( policy_log_probs, response_mask, gradient_accumulation_steps,
                                loss_type, raw_rewards, advantages, old_log_probs, cliprange):
         
+        #Logging shapes for debug!
+        print (f"policy_log_probs shape : {policy_log_probs.shape}")
+        print (f"response_mask shape : {response_mask.shape}")
+        print (f"raw_rewards shape : {raw_rewards.shape}")
+        print (f"advantages shape : {advantages.shape}")
+        print (f"old_log_probs shape : {old_log_probs.shape}")
+        print (f"gradient_accumulation_steps : {gradient_accumulation_steps}")
+
+
+        
 
         per_token_loss, metadata = compute_policy_gradient_loss (policy_log_probs, loss_type, raw_rewards, advantages, 
                                       old_log_probs, cliprange)
