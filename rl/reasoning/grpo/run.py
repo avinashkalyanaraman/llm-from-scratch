@@ -44,7 +44,7 @@ def runVLLMGeneration( vllm_valdn_model, prompt_strs, sampling_params):
 
 def getRewardsAcc (outputs, gt_outputs):
 
-    results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, gt_outputs, outputs)
+    results = utils.evaluate_model (grader.drgrpo_grader.r1_zero_reward_fn, outputs, gt_outputs)
 
     format_corrects_acc = len([ele for ele in results if ele[2]['format_reward'] > 0])*100./len(results)
     answer_corrects_acc = len([ele for ele in results if ele[2]['answer_reward'] > 0])*100./len(results)
@@ -141,6 +141,13 @@ if __name__ == '__main__':
         seed = SEED, logprobs = 1)
     sampling_params.include_stop_str_in_output = True #</answer> will be incl. in generation
 
+    valn_sampling_params = SamplingParams(min_tokens = sampling_min_tokens,
+        max_tokens=sampling_max_tokens, n = 1,
+        temperature=sampling_temperature, top_p = 1.0, stop=["</answer>"],
+        seed = SEED, logprobs = 1)
+    valn_sampling_params.include_stop_str_in_output = True #</answer> will be incl. in generation
+    
+
     #Copy current policy weights to VLLMs GPU (device=cuda:1)
     vllm_helper.load_policy_into_vllm_instance_orig (policy, vllm_gen_model)
 
@@ -160,6 +167,7 @@ if __name__ == '__main__':
 
 
     #Setup WandB
+    run = None
     if IS_WANDB:
         run = wandb.init(
             # Set the wandb entity where your project will be logged (generally your team name).
@@ -183,7 +191,7 @@ if __name__ == '__main__':
 
 
     #Logging before RLVR!
-    _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, sampling_params) 
+    _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
     format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
     wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, -1, IS_WANDB)
     wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, -1, IS_WANDB)
@@ -307,7 +315,7 @@ if __name__ == '__main__':
 
 
         #Run validation!
-        _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, sampling_params) 
+        _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
         format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
         wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, on_policy_step, IS_WANDB)
         wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, on_policy_step, IS_WANDB)
