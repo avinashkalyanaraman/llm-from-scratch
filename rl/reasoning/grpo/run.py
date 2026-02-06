@@ -198,6 +198,8 @@ if __name__ == '__main__':
 
     for on_policy_step in range(n_grpo_steps):
 
+        print (f"Handling on-policy step # {on_policy_step}")
+
         #Let us sample num_training_samples elements from the training set!
         sampled_train_prompt_strs, sampled_train_output_strs = utils.sampleTrainingData (train_data, num_training_samples)
 
@@ -237,6 +239,7 @@ if __name__ == '__main__':
         off_policy_train_dataloader = DataLoader (off_policy_train_data, batch_size=microbatchsize_train, shuffle=True, drop_last=True)
 
         for off_policy_train_step in range (epochs_per_rollout_batch):
+            print (f"Handling off_policy step {off_policy_train_step} in on_policy_step {on_policy_step}")
             losses_since_last_commit = [] #Aggregating losses here to log for every off_policy_train_step!
 
             optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples
@@ -275,8 +278,6 @@ if __name__ == '__main__':
                     preclip_norm = torch.nn.utils.clip_grad_norm_(policy.parameters(), max_norm)
                     clipped_norm = torch.sqrt(sum(p.grad.norm()**2 for p in policy.parameters() if p.grad is not None))
                     clip_fraction = float (preclip_norm > max_norm)
-                    wandb_utils.logDictToWANDB (run, {'preclip_norm': preclip_norm, 'clipped_norm' : clipped_norm, 'clip_fraction' : clip_fraction}, num_steps, IS_WANDB)
-
 
                     optimizer.step()
                     optimizer.zero_grad(set_to_none=True) #Faster
@@ -284,10 +285,12 @@ if __name__ == '__main__':
                     num_steps += 1
 
                     #For every optimizer update, we will write the loss to wandb!
-                    #TODO:  Write loss, grad_norm, clipping fraction and token entropy!
-                    #1. reporting the loss
+                    #Write loss, grad_norm, TODO : clipping fraction and token entropy!
+                    #1. reporting the loss and  
+                    #2. grad norm
                     wandb_utils.logToWANDB (run, 'train_loss_per_opt_update', mean_per_token_loss.item(), num_steps, IS_WANDB)
-                    
+                    wandb_utils.logDictToWANDB (run, {'preclip_norm': preclip_norm, 'clipped_norm' : clipped_norm, 'clip_fraction' : clip_fraction}, num_steps, IS_WANDB)
+
 
             
             # We will also write training accuracy and valdn accuracy.
@@ -295,7 +298,7 @@ if __name__ == '__main__':
             wandb_utils.logToWANDB (run, 'avg_train_loss', sum(losses_since_last_commit)/len(losses_since_last_commit), num_steps, IS_WANDB)
             losses_since_last_commit = [] #Resetting this list to accumulate losses for next epoch!
             
-        #TODO: Run and report training & validation accuracy at the end of every epoch after copying weights to vllm model!
+        #Run and report training & validation accuracy at the end of every epoch after copying weights to vllm model!
         vllm_helper.load_policy_into_vllm_instance_orig (policy, vllm_gen_model)
 
         #Rerun on training set and see how the accuracy has changed!
@@ -319,6 +322,3 @@ if __name__ == '__main__':
         format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
         wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, on_policy_step, IS_WANDB)
         wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, on_policy_step, IS_WANDB)
-
-
-        
