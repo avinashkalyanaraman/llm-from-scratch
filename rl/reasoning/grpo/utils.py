@@ -227,7 +227,8 @@ def adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln
 
     adj_response_logprobs = [response_logprobs[mub_num, 
                                                mub_prompt_token_lens [mub_num]-1 : 
-                                               mub_prompt_token_lens [mub_num]-1 + mub_compln_token_lens[mub_num]] 
+                                               #mub_prompt_token_lens [mub_num]-1 + mub_compln_token_lens[mub_num]
+                                               ] 
                                                for mub_num in range(mub_size)]
     
     # -1 because the last prompt token predicts the first compln token and we want that since resp_logprobs is shifted by 1!
