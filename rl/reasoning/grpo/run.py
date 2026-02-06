@@ -61,6 +61,7 @@ if __name__ == '__main__':
     parser.add_argument("--advantage_eps", type=float, default=1e-6, help="epsilon to avoid div by zero in grpo norm")
     
     parser.add_argument("--num_training_samples", type=int, default=1024, help="# training samples to take from the training file [=# of prompts]")
+    parser.add_argument("--num_valn_samples", type=int, default=2000, help="# valn samples to take from the valn file [=# of prompts]")
     
     parser.add_argument("--group_size", type=int, default=8, help="groupsize : number of rollouts per prompt")
     
@@ -109,6 +110,7 @@ if __name__ == '__main__':
     valdn_data_file = args.vfile
 
     num_training_samples = args.num_training_samples
+    num_valn_samples = args.num_valn_samples
 
     SEED = 42
     torch.manual_seed (SEED)
@@ -165,6 +167,7 @@ if __name__ == '__main__':
     val_prompt_strs = [ele['prompt'] for ele in val_data]
     val_output_strs = [ele['response'] for ele in val_data]
 
+    val_prompt_strs, val_output_strs = utils.sampleData (val_data, num_valn_samples)
 
     #Setup WandB
     run = None
@@ -201,7 +204,7 @@ if __name__ == '__main__':
         print (f"Handling on-policy step # {on_policy_step}")
 
         #Let us sample num_training_samples elements from the training set!
-        sampled_train_prompt_strs, sampled_train_output_strs = utils.sampleTrainingData (train_data, num_training_samples)
+        sampled_train_prompt_strs, sampled_train_output_strs = utils.sampleData (train_data, num_training_samples)
 
         #We take the sampled_train_prompt_strs and pass it through vllm!
         vllm_output, all_completions = runVLLMGeneration (vllm_gen_model, sampled_train_prompt_strs, sampling_params)
@@ -266,7 +269,7 @@ if __name__ == '__main__':
                 adj_response_logprobs = utils.adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln_token_lens) #[muB, max_gen_len]
 
                 #Compute loss for the micro-batch
-                mean_per_token_loss, metadata = utils.grpo_microbatch_train_step( adj_response_logprobs, mub_logprob_resp_mask, gradient_acc_steps,
+                mean_per_token_loss, metadata = utils.grpo_microbatch_train_step( adj_response_logprobs ['log_probs'], mub_logprob_resp_mask, gradient_acc_steps,
                                loss_type, mub_agg_rewards, mub_adv_rewards, mub_logprob_matrix, advantage_eps)
 
                 losses_since_last_commit.append(mean_per_token_loss.item())

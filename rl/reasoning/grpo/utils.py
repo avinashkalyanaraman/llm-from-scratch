@@ -230,7 +230,7 @@ def adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln
                                                mub_prompt_token_lens [mub_num]-1 + mub_compln_token_lens[mub_num]] 
                                                for mub_num in range(mub_size)]
     
-    # -1 because the last prompt token is the first compln token and we want that since resp_logprobs is shifted by 1!
+    # -1 because the last prompt token predicts the first compln token and we want that since resp_logprobs is shifted by 1!
     # and then we take all the tokens that were generated (in the second half of the indexing)!
 
     adj_response_logprobs = torch.nn.utils.rnn.pad_sequence (adj_response_logprobs, batch_first=True, padding_value=0)
@@ -257,7 +257,7 @@ def adjust_response_logprobs_fast(response_logprobs, prompt_lens, compln_lens):
 
 
 
-def sampleTrainingData (train_data, num_training_samples):
+def sampleData (train_data, num_training_samples):
     #Let us sample num_training_samples elements from the training set!
     indices = random.sample (range (len(train_data)), num_training_samples)
     sampled_train_data = [train_data[ele] for ele in indices]
