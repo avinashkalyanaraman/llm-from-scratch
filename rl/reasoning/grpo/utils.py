@@ -128,7 +128,7 @@ def getVLLMLogProbMatrix (outputs):
     for req in outputs: #for each prompt
         for gen in req.outputs : # for each generation within it
             logprobs = gen.logprobs #the logprobs from vllm for this generation
-            logprobs = [list(ele.values())[0] for ele in logprobs] #get the top-token's logprob value!
+            logprobs = [list(ele.values())[0].logprob for ele in logprobs] #get the top-token's logprob value!
             agg_logprobs.append (torch.tensor (logprobs))
             generation_lens.append (len(logprobs)) #the length of the output generation!
     
