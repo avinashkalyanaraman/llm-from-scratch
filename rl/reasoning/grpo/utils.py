@@ -227,7 +227,7 @@ def adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln
 
     adj_response_logprobs = [response_logprobs[mub_num, 
                                                mub_prompt_token_lens [mub_num]-1 : 
-                                               #mub_prompt_token_lens [mub_num]-1 + mub_compln_token_lens[mub_num]
+                                               mub_prompt_token_lens [mub_num]-1 + mub_compln_token_lens[mub_num]
                                                ] 
                                                for mub_num in range(mub_size)]
     
@@ -267,3 +267,8 @@ def sampleData (train_data, num_training_samples):
     sampled_train_output_strs = [ele['response'] for ele in sampled_train_data]
 
     return sampled_train_prompt_strs, sampled_train_output_strs
+
+def adjustOldLogProbs (logprob_matrix, mask, truncate_len):
+    logprob_matrix = logprob_matrix [...,:truncate_len]
+    mask = mask[...,:truncate_len]
+    return logprob_matrix, mask
