@@ -190,14 +190,6 @@ if __name__ == '__main__':
             },
         )
 
-        #These metrics have a different x-axis!
-        wandb.define_metric("on_policy_step")
-        wandb.define_metric("num_steps")
-        wandb.define_metric("*", step_metric="num_steps")
-        wandb.define_metric("agg_answer_rewards pre_off_policy", step_metric="on_policy_step")
-        wandb.define_metric("agg_answer_rewards post_off_policy", step_metric="on_policy_step")
-        wandb.define_metric("agg_format_rewards pre_off_policy", step_metric="on_policy_step")
-        wandb.define_metric("agg_format_rewards post_off_policy", step_metric="on_policy_step")
 
     num_steps = 0
 
@@ -205,8 +197,7 @@ if __name__ == '__main__':
     #Logging before RLVR!
     _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
     format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
-    wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, num_steps, IS_WANDB)
-    wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, num_steps, IS_WANDB)
+    wandb_utils.logDictToWANDB (run, {'valn_format_acc' : format_corrects_acc, 'valn_answers_acc': answer_corrects_acc}, num_steps, IS_WANDB)
 
     for on_policy_step in range(n_grpo_steps):
 
@@ -223,13 +214,10 @@ if __name__ == '__main__':
         #Repeated ground truth
         agg_sampled_train_output_strs= [ele for ele in sampled_train_output_strs for _ in range(group_size)] #Len = B*G
         assert len(all_completions) == len(agg_sampled_train_output_strs)
-        adv_rewards, agg_rewards, rewards_metadata = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
+        adv_rewards, agg_rewards, rewards_metadata_pre = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
                                                           all_completions, agg_sampled_train_output_strs,
                                                           group_size, advantage_eps, is_std_norm) #[B*G,]
         
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards pre_off_policy', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards pre_off_policy', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
-
 
         #Get the logprobs that is 0-padded, and the corresponding response mask with mask 0 for pads 
         logprob_matrix, logprob_response_mask = utils.getVLLMLogProbMatrix (vllm_output) #[B*G, max_output_token_len]
@@ -254,7 +242,7 @@ if __name__ == '__main__':
             print (f"Handling off_policy step {off_policy_train_step} in on_policy_step {on_policy_step}")
             losses_since_last_commit = [] #Aggregating losses here to log for every off_policy_train_step!
 
-            optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples
+            optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples in the inner loop!
             #causing the grad-acc if block to not execute and hence not zero-out the gradients.!
             
             #Pass the prompt + completion that we got via VLLM into the policy model, and get the logits!
@@ -316,8 +304,11 @@ if __name__ == '__main__':
                     #Write loss, grad_norm, TODO : clipping fraction and token entropy!
                     #1. reporting the loss and  
                     #2. grad norm
-                    wandb_utils.logToWANDB (run, 'train_loss_per_opt_update', mean_per_token_loss.item(), num_steps, IS_WANDB)
-                    wandb_utils.logDictToWANDB (run, {'preclip_norm': preclip_norm, 'clipped_norm' : clipped_norm, 'clip_fraction' : clip_fraction}, num_steps, IS_WANDB)
+                    #wandb_utils.logToWANDB (run, 'train_loss_per_opt_update', mean_per_token_loss.item(), num_steps, IS_WANDB)
+                    wandb_utils.logDictToWANDB (run, {'train_loss_per_opt_update': mean_per_token_loss.item(),
+                                                      'preclip_norm': preclip_norm, 'clipped_norm' : clipped_norm, 
+                                                      'clip_fraction' : clip_fraction}, 
+                                                      num_steps, IS_WANDB)
 
 
             
@@ -335,17 +326,20 @@ if __name__ == '__main__':
 
         #Get the rewards for the generations
         #Repeated ground truth
-        adv_rewards, agg_rewards, rewards_metadata = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
+        _, _, rewards_metadata_post = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
                                                           all_completions, agg_sampled_train_output_strs,
                                                           group_size, advantage_eps, is_std_norm) #[B*G,]        
 
 
         
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards post_off_policy', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards post_off_policy', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
+        wandb_log_tr_rewards_dict = {'agg_format_rewards pre_off_policy' : torch.mean(rewards_metadata_pre['agg_format_rewards']).item()*100.,
+                          'agg_answer_rewards pre_off_policy' : torch.mean(rewards_metadata_pre['agg_answer_rewards']).item()*100.,
+                          'agg_format_rewards post_off_policy' : torch.mean(rewards_metadata_post['agg_format_rewards']).item()*100.,
+                          'agg_answer_rewards post_off_policy' : torch.mean(rewards_metadata_post['agg_answer_rewards']).item()*100.}
+        wandb_utils.logDictToWANDB (run, wandb_log_tr_rewards_dict, num_steps, IS_WANDB)
 
         #Run validation!
         _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
         format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
-        wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, num_steps, IS_WANDB)
-        wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, num_steps, IS_WANDB)
+        wandb_utils.logDictToWANDB (run, {'valn_format_acc' : format_corrects_acc, 'valn_answers_acc': answer_corrects_acc}, num_steps, IS_WANDB)
+        
