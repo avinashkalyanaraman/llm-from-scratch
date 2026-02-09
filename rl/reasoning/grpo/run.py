@@ -261,6 +261,11 @@ if __name__ == '__main__':
                 mub_agg_rewards = mub_agg_rewards.to(device) #[muB,]
                 mub_logprob_matrix = mub_logprob_matrix.to(device) #[muB,S'] where S' = max_gen_len
                 mub_logprob_resp_mask = mub_logprob_resp_mask.to(device) #[muB,S'] where S' = max_gen_len
+
+                #Shape adjustments to aid broadcasts
+                mub_adv_rewards = mub_adv_rewards.unsqueeze(-1) #[muB,1]
+                mub_agg_rewards = mub_agg_rewards.unsqueeze(-1) #[muB,1]
+
                 
                 #Call the model!
                 response_logprobs = utils.get_response_log_probs (policy, X, Y, False)['log_probs'] #[muB, S-1]
