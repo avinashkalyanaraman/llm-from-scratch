@@ -271,7 +271,9 @@ if __name__ == '__main__':
                 response_logprobs = utils.get_response_log_probs (policy, X, Y, False)['log_probs'] #[muB, S-1]
                 
                 #Adjust response-logprobs to not inc. the prompt itself, except the last token of the prompt so that we can compare with vllm extracted logprobs!
-                adj_response_logprobs = utils.adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln_token_lens) #[muB, max_gen_len in that mini-batch]
+                adj_response_logprobs = utils.adjustResponseLogProbsFast (response_logprobs, mub_prompt_token_lens, mub_compln_token_lens) #[muB, max_gen_len in that mini-batch]
+                adj_response_logprobs_slow = utils.adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln_token_lens) #[muB, max_gen_len in that mini-batch]
+                assert adj_response_logprobs == adj_response_logprobs_slow
 
                 #Now adj_response_logprobs is of shape [mub, max_gen_len_in_minibatch]
                 #while mub_logprob_matrix and mub_logprob_resp_mask are of shape [mub, max_gen_len_across_all_B*G_rollouts]
@@ -334,5 +336,5 @@ if __name__ == '__main__':
         #Run validation!
         _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
         format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
-        wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, on_policy_step, IS_WANDB)
-        wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, on_policy_step, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'valn_format_acc', format_corrects_acc, num_steps, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'valn_answers_acc', answer_corrects_acc, num_steps, IS_WANDB)

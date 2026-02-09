@@ -238,7 +238,7 @@ def adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln
     return adj_response_logprobs
 
 #With LLM-assist! [Compare speed-up]
-def adjust_response_logprobs_fast(response_logprobs, prompt_lens, compln_lens):
+def adjustResponseLogProbsFast(response_logprobs, prompt_lens, compln_lens):
     B, T = response_logprobs.shape
     device = response_logprobs.device
 
