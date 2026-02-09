@@ -221,6 +221,7 @@ if __name__ == '__main__':
         wandb_utils.logToWANDB (run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item(), num_steps, IS_WANDB)
         wandb_utils.logToWANDB (run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item(), num_steps, IS_WANDB)
 
+        old_num_steps = num_steps #Just so that we have same x-tick while comparing wandb post 1 on_policy_step!
 
         #Get the logprobs that is 0-padded, and the corresponding response mask with mask 0 for pads 
         logprob_matrix, logprob_response_mask = utils.getVLLMLogProbMatrix (vllm_output) #[B*G, max_output_token_len]
@@ -332,8 +333,8 @@ if __name__ == '__main__':
 
 
         
-        wandb_utils.logToWANDB (run, 'agg_format_rewards [post off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item(), num_steps, IS_WANDB)
-        wandb_utils.logToWANDB (run, 'agg_answer_rewards [post off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item(), num_steps, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'agg_format_rewards [post off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item(), old_num_steps, IS_WANDB)
+        wandb_utils.logToWANDB (run, 'agg_answer_rewards [post off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item(), old_num_steps, IS_WANDB)
 
 
         #Run validation!
