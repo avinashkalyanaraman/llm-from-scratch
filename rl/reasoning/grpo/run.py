@@ -227,8 +227,8 @@ if __name__ == '__main__':
         
         #wandb_utils.logToWANDB (run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item(), num_steps, IS_WANDB)
         #wandb_utils.logToWANDB (run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item(), num_steps, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
 
         old_num_steps = num_steps #Just so that we have same x-tick while comparing wandb post 1 on_policy_step!
 
@@ -342,8 +342,8 @@ if __name__ == '__main__':
 
 
         
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards [post off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards [post off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards [post off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards [post off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
 
         #Run validation!
         _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
