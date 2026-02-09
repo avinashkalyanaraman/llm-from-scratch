@@ -263,7 +263,7 @@ if __name__ == '__main__':
                 mub_logprob_resp_mask = mub_logprob_resp_mask.to(device) #[muB,S'] where S' = max_gen_len
                 
                 #Call the model!
-                response_logprobs = utils.get_response_log_probs (policy, X, Y, False) #[muB, S-1]
+                response_logprobs = utils.get_response_log_probs (policy, X, Y, False)['log_probs'] #[muB, S-1]
                 
                 #Adjust response-logprobs to not inc. the prompt itself, except the last token of the prompt so that we can compare with vllm extracted logprobs!
                 adj_response_logprobs = utils.adjustResponseLogProbs (response_logprobs, mub_prompt_token_lens, mub_compln_token_lens) #[muB, max_gen_len in that mini-batch]
@@ -275,7 +275,7 @@ if __name__ == '__main__':
                                                                                      adj_response_logprobs.shape [-1])
 
                 #Compute loss for the micro-batch
-                mean_per_token_loss, metadata = utils.grpo_microbatch_train_step( adj_response_logprobs ['log_probs'], mub_logprob_resp_mask, gradient_acc_steps,
+                mean_per_token_loss, metadata = utils.grpo_microbatch_train_step( adj_response_logprobs, mub_logprob_resp_mask, gradient_acc_steps,
                                loss_type, mub_agg_rewards, mub_adv_rewards, mub_logprob_matrix, advantage_eps)
 
                 losses_since_last_commit.append(mean_per_token_loss.item())
