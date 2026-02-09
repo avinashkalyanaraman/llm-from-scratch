@@ -261,6 +261,9 @@ if __name__ == '__main__':
                 mub_agg_rewards = mub_agg_rewards.to(device) #[muB,]
                 mub_logprob_matrix = mub_logprob_matrix.to(device) #[muB,S'] where S' = max_gen_len
                 mub_logprob_resp_mask = mub_logprob_resp_mask.to(device) #[muB,S'] where S' = max_gen_len
+                mub_prompt_token_lens = mub_prompt_token_lens.to(device) #[B*G]
+                mub_compln_token_lens = mub_compln_token_lens.to(device) #[B*G]
+
 
                 #Shape adjustments to aid broadcasts
                 mub_adv_rewards = mub_adv_rewards.unsqueeze(-1) #[muB,1]
