@@ -65,7 +65,7 @@ def compute_grpo_clip_loss (advantages, policy_log_probs, old_log_probs, clipran
     #more elegant: 1 exp + prevents underflow!
     new_over_old_ratio = torch.exp (policy_log_probs - old_log_probs)
     clipped_new_over_old_ratio = torch.clamp ( new_over_old_ratio , 1-cliprange, 1+cliprange)
-
+    
     lhs = new_over_old_ratio * advantages
     rhs = clipped_new_over_old_ratio * advantages
 
@@ -100,6 +100,7 @@ def masked_mean(tensor, mask, dim = None):
 def grpo_microbatch_train_step( policy_log_probs, response_mask, gradient_accumulation_steps,
                                loss_type, raw_rewards, advantages, old_log_probs, cliprange):
         
+        '''
         #Logging shapes for debug!
         print (f"policy_log_probs shape : {policy_log_probs.shape}")
         print (f"response_mask shape : {response_mask.shape}")
@@ -107,9 +108,7 @@ def grpo_microbatch_train_step( policy_log_probs, response_mask, gradient_accumu
         print (f"advantages shape : {advantages.shape}")
         print (f"old_log_probs shape : {old_log_probs.shape}")
         print (f"gradient_accumulation_steps : {gradient_accumulation_steps}")
-
-
-        
+        '''
 
         per_token_loss, metadata = compute_policy_gradient_loss (policy_log_probs, loss_type, raw_rewards, advantages, 
                                       old_log_probs, cliprange)
