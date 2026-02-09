@@ -1,0 +1,9 @@
+datasets
+transformers>=4.48.2,<5
+vllm==0.7.2
+latex2sympy2_extended
+math_verify
+pylatexenc
+hf_transfer
+scikit-learn
+wandb
