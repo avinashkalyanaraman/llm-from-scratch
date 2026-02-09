@@ -192,6 +192,8 @@ if __name__ == '__main__':
 
         #These metrics have a different x-axis!
         wandb.define_metric("on_policy_step")
+        wandb.define_metric("num_steps")
+        wandb.define_metric("*", step_metric="num_steps")
         wandb.define_metric("agg_answer_rewards [pre off-policy]", step_metric="on_policy_step")
         wandb.define_metric("agg_answer_rewards [post off-policy]", step_metric="on_policy_step")
         wandb.define_metric("agg_format_rewards [pre off-policy]", step_metric="on_policy_step")
@@ -230,7 +232,6 @@ if __name__ == '__main__':
         wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
         wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
 
-        old_num_steps = num_steps #Just so that we have same x-tick while comparing wandb post 1 on_policy_step!
 
         #Get the logprobs that is 0-padded, and the corresponding response mask with mask 0 for pads 
         logprob_matrix, logprob_response_mask = utils.getVLLMLogProbMatrix (vllm_output) #[B*G, max_output_token_len]
