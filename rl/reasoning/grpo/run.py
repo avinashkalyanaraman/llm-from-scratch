@@ -194,10 +194,10 @@ if __name__ == '__main__':
         wandb.define_metric("on_policy_step")
         wandb.define_metric("num_steps")
         wandb.define_metric("*", step_metric="num_steps")
-        wandb.define_metric("agg_answer_rewards [pre off-policy]", step_metric="on_policy_step")
-        wandb.define_metric("agg_answer_rewards [post off-policy]", step_metric="on_policy_step")
-        wandb.define_metric("agg_format_rewards [pre off-policy]", step_metric="on_policy_step")
-        wandb.define_metric("agg_format_rewards [post off-policy]", step_metric="on_policy_step")
+        wandb.define_metric("agg_answer_rewards pre_off_policy", step_metric="on_policy_step")
+        wandb.define_metric("agg_answer_rewards post_off_policy", step_metric="on_policy_step")
+        wandb.define_metric("agg_format_rewards pre_off_policy", step_metric="on_policy_step")
+        wandb.define_metric("agg_format_rewards post_off_policy", step_metric="on_policy_step")
 
     num_steps = 0
 
@@ -227,10 +227,8 @@ if __name__ == '__main__':
                                                           all_completions, agg_sampled_train_output_strs,
                                                           group_size, advantage_eps, is_std_norm) #[B*G,]
         
-        #wandb_utils.logToWANDB (run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item(), num_steps, IS_WANDB)
-        #wandb_utils.logToWANDB (run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item(), num_steps, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards [pre off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards pre_off_policy', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards pre_off_policy', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
 
 
         #Get the logprobs that is 0-padded, and the corresponding response mask with mask 0 for pads 
@@ -343,8 +341,8 @@ if __name__ == '__main__':
 
 
         
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards [post off-policy]', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
-        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards [post off-policy]', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_format_rewards post_off_policy', torch.mean(rewards_metadata['agg_format_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
+        wandb_utils.logToWANDBWithStepKey(run, 'agg_answer_rewards post_off_policy', torch.mean(rewards_metadata['agg_answer_rewards']).item()*100., 'on_policy_step', on_policy_step, num_steps, IS_WANDB)
 
         #Run validation!
         _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
