@@ -205,6 +205,7 @@ if __name__ == '__main__':
 
     for on_policy_step in range(n_grpo_steps):
 
+        print ("---"*20)
         print (f"Handling on-policy step # {on_policy_step}")
 
         #Let us sample num_training_samples elements from the training set!
