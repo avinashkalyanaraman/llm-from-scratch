@@ -245,6 +245,7 @@ if __name__ == '__main__':
         for off_policy_train_step in range (epochs_per_rollout_batch):
             print (f"Handling off_policy step {off_policy_train_step} in on_policy_step {on_policy_step}")
             losses_since_last_commit = [] #Aggregating losses here to log for every off_policy_train_step!
+            avg_grpo_clips_since_last_commit = [] #Aggregating avg grpo clip %s to log for every off_policy_train_step!
 
             optimizer.zero_grad(set_to_none=True) #Faster + zero-ing here also handles case when traindata size and accumulated batch size aren't multiples in the inner loop!
             #causing the grad-acc if block to not execute and hence not zero-out the gradients.!
@@ -288,6 +289,12 @@ if __name__ == '__main__':
                 #Compute loss for the micro-batch
                 mean_per_token_loss, metadata = utils.grpo_microbatch_train_step( adj_response_logprobs, mub_logprob_resp_mask, gradient_acc_steps,
                                loss_type, mub_agg_rewards, mub_adv_rewards, mub_logprob_matrix, advantage_eps)
+                
+                if loss_type == 'grpo_clip':
+                    isclip_mask = metadata['isclip']
+                    avg_clipped = torch.sum(isclip_mask)/torch.numel(isclip_mask)
+                    avg_grpo_clips_since_last_commit.append (avg_clipped.item())
+                    
 
                 losses_since_last_commit.append(mean_per_token_loss.item())
 
@@ -319,7 +326,9 @@ if __name__ == '__main__':
             # We will also write training accuracy and valdn accuracy.
             # Note that training accuracy is on a set of samples that varies every epoch!
             wandb_utils.logToWANDB (run, 'avg_train_loss', sum(losses_since_last_commit)/len(losses_since_last_commit), num_steps, IS_WANDB)
+            wandb_utils.logToWANDB (run, 'avg_grpo_clips', sum(avg_grpo_clips_since_last_commit)/len(avg_grpo_clips_since_last_commit), num_steps, IS_WANDB)
             losses_since_last_commit = [] #Resetting this list to accumulate losses for next epoch!
+            avg_grpo_clips_since_last_commit = [] #Resetting this list that accumulates avg grpo losses for the batch!
             
         #Run and report training & validation accuracy at the end of every epoch after copying weights to vllm model!
         vllm_helper.load_policy_into_vllm_instance_orig (policy, vllm_gen_model)
