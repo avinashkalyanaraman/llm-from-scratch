@@ -83,6 +83,9 @@ if __name__ == '__main__':
     parser.add_argument("--tfile", type=str, default="../sft/data/sft_train.jsonl", help="file to be used as training")
     parser.add_argument("--vfile", type=str, default="../sft/data/sft_valdn.jsonl", help="file to be used for validation")
 
+    parser.add_argument("--valn_granularity", type=int, default=1, help="how often (in terms of outer-loop grpo steps) should valn be done and sent to W&B")
+
+
 
     args = parser.parse_args()
     learning_rate = args.lr
@@ -111,6 +114,7 @@ if __name__ == '__main__':
 
     num_training_samples = args.num_training_samples
     num_valn_samples = args.num_valn_samples
+    valn_granularity = args.valn_granularity
 
     SEED = 42
     torch.manual_seed (SEED)
@@ -320,26 +324,30 @@ if __name__ == '__main__':
         #Run and report training & validation accuracy at the end of every epoch after copying weights to vllm model!
         vllm_helper.load_policy_into_vllm_instance_orig (policy, vllm_gen_model)
 
-        #Rerun on training set and see how the accuracy has changed!
-        _, all_completions = runVLLMGeneration (vllm_gen_model, sampled_train_prompt_strs, sampling_params)
-        print (f"Total # of generations while rerunning on training set post off-policy update = {len(all_completions)}")
+        #Re-run on training set & also validation set and log accuracy
 
-        #Get the rewards for the generations
-        #Repeated ground truth
-        _, _, rewards_metadata_post = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
-                                                          all_completions, agg_sampled_train_output_strs,
-                                                          group_size, advantage_eps, is_std_norm) #[B*G,]        
+        if (on_policy_step + 1)% valn_granularity == 0:
+
+            #Rerun on training set and see how the accuracy has changed!
+            _, all_completions = runVLLMGeneration (vllm_gen_model, sampled_train_prompt_strs, sampling_params)
+            print (f"Total # of generations while rerunning on training set post off-policy update = {len(all_completions)}")
+
+            #Get the rewards for the generations
+            #Repeated ground truth
+            _, _, rewards_metadata_post = utils.compute_group_normalized_rewards (grader.drgrpo_grader.r1_zero_reward_fn, 
+                                                            all_completions, agg_sampled_train_output_strs,
+                                                            group_size, advantage_eps, is_std_norm) #[B*G,]        
 
 
-        
-        wandb_log_tr_rewards_dict = {'agg_format_rewards_pre_off_policy' : torch.mean(rewards_metadata_pre['agg_format_rewards']).item()*100.,
-                          'agg_answer_rewards_pre_off_policy' : torch.mean(rewards_metadata_pre['agg_answer_rewards']).item()*100.,
-                          'agg_format_rewards_post_off_policy' : torch.mean(rewards_metadata_post['agg_format_rewards']).item()*100.,
-                          'agg_answer_rewards_post_off_policy' : torch.mean(rewards_metadata_post['agg_answer_rewards']).item()*100.}
-        wandb_utils.logDictToWANDB (run, wandb_log_tr_rewards_dict, num_steps, IS_WANDB)
+            
+            wandb_log_tr_rewards_dict = {'agg_format_rewards_pre_off_policy' : torch.mean(rewards_metadata_pre['agg_format_rewards']).item()*100.,
+                            'agg_answer_rewards_pre_off_policy' : torch.mean(rewards_metadata_pre['agg_answer_rewards']).item()*100.,
+                            'agg_format_rewards_post_off_policy' : torch.mean(rewards_metadata_post['agg_format_rewards']).item()*100.,
+                            'agg_answer_rewards_post_off_policy' : torch.mean(rewards_metadata_post['agg_answer_rewards']).item()*100.}
+            wandb_utils.logDictToWANDB (run, wandb_log_tr_rewards_dict, num_steps, IS_WANDB)
 
-        #Run validation!
-        _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
-        format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
-        wandb_utils.logDictToWANDB (run, {'valn_format_acc' : format_corrects_acc, 'valn_answers_acc': answer_corrects_acc}, num_steps, IS_WANDB)
+            #Run validation!
+            _, valn_completions = runVLLMGeneration(vllm_gen_model, val_prompt_strs, valn_sampling_params) 
+            format_corrects_acc, answer_corrects_acc = getRewardsAcc (valn_completions, val_output_strs)
+            wandb_utils.logDictToWANDB (run, {'valn_format_acc' : format_corrects_acc, 'valn_answers_acc': answer_corrects_acc}, num_steps, IS_WANDB)
         
