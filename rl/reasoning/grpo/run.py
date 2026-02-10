@@ -332,10 +332,10 @@ if __name__ == '__main__':
 
 
         
-        wandb_log_tr_rewards_dict = {'agg_format_rewards pre_off_policy' : torch.mean(rewards_metadata_pre['agg_format_rewards']).item()*100.,
-                          'agg_answer_rewards pre_off_policy' : torch.mean(rewards_metadata_pre['agg_answer_rewards']).item()*100.,
-                          'agg_format_rewards post_off_policy' : torch.mean(rewards_metadata_post['agg_format_rewards']).item()*100.,
-                          'agg_answer_rewards post_off_policy' : torch.mean(rewards_metadata_post['agg_answer_rewards']).item()*100.}
+        wandb_log_tr_rewards_dict = {'agg_format_rewards_pre_off_policy' : torch.mean(rewards_metadata_pre['agg_format_rewards']).item()*100.,
+                          'agg_answer_rewards_pre_off_policy' : torch.mean(rewards_metadata_pre['agg_answer_rewards']).item()*100.,
+                          'agg_format_rewards_post_off_policy' : torch.mean(rewards_metadata_post['agg_format_rewards']).item()*100.,
+                          'agg_answer_rewards_post_off_policy' : torch.mean(rewards_metadata_post['agg_answer_rewards']).item()*100.}
         wandb_utils.logDictToWANDB (run, wandb_log_tr_rewards_dict, num_steps, IS_WANDB)
 
         #Run validation!
