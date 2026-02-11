@@ -35,10 +35,10 @@ class MyDataset(Dataset):
     def __len__(self):
         return self.x.shape[0]
 
-def runVLLMGeneration( vllm_valdn_model, prompt_strs, sampling_params):
+def runVLLMGeneration( vllm_model, prompt_strs, sampling_params):
 
     #We take the sampled_train_prompt_strs and pass it through vllm!
-    vllm_output = vllm_gen_model.generate(prompt_strs, sampling_params)
+    vllm_output = vllm_model.generate(prompt_strs, sampling_params)
     all_completions = [c.text for req in vllm_output for c in req.outputs]
     return vllm_output, all_completions
 
@@ -59,6 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--lr", default = 1e-5, type=float, help="Learning rate")
     parser.add_argument("--n_grpo_steps", type=int, default=200, help="Number of times to do rollouts (Outerloop)")
     parser.add_argument("--advantage_eps", type=float, default=1e-6, help="epsilon to avoid div by zero in grpo norm")
+    parser.add_argument("--cliprange", type=float, default=0.2, help="clip epsilon to use in grpo clipping to curtail updates")
     
     parser.add_argument("--num_training_samples", type=int, default=1024, help="# training samples to take from the training file [=# of prompts]")
     parser.add_argument("--num_valn_samples", type=int, default=2000, help="# valn samples to take from the valn file [=# of prompts]")
@@ -77,7 +78,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--gpu_mem_utilizn", type=float, default=0.85, help="vllm gpu mem utilzn limit")
 
-    parser.add_argument("--loss", type=str, default="no_baseline", help="loss type to use [no_baseline: REINFORCE vanilla, reinforce_with_baseline, grpo_clip]")
+    parser.add_argument("--loss", type=str, default="grpo_clip", help="loss type to use [no_baseline: REINFORCE vanilla, reinforce_with_baseline, grpo_clip]")
     parser.add_argument("--std_norm", action="store_true", help="do stdev normalization")
 
     parser.add_argument("--tfile", type=str, default="../sft/data/sft_train.jsonl", help="file to be used as training")
@@ -91,6 +92,7 @@ if __name__ == '__main__':
     learning_rate = args.lr
     n_grpo_steps = args.n_grpo_steps
     advantage_eps = args.advantage_eps
+    cliprange = args.cliprange
     group_size = args.group_size
 
     sampling_temperature = args.sampling_temperature
@@ -289,7 +291,7 @@ if __name__ == '__main__':
 
                 #Compute loss for the micro-batch
                 mean_per_token_loss, metadata = utils.grpo_microbatch_train_step( adj_response_logprobs, mub_logprob_resp_mask, gradient_acc_steps,
-                               loss_type, mub_agg_rewards, mub_adv_rewards, mub_logprob_matrix, advantage_eps)
+                               loss_type, mub_agg_rewards, mub_adv_rewards, mub_logprob_matrix, cliprange)
                 
                 if loss_type == 'grpo_clip':
                     isclip_mask = metadata['isclip']
@@ -327,7 +329,8 @@ if __name__ == '__main__':
             # We will also write training accuracy and valdn accuracy.
             # Note that training accuracy is on a set of samples that varies every epoch!
             wandb_utils.logToWANDB (run, 'avg_train_loss', sum(losses_since_last_commit)/len(losses_since_last_commit), num_steps, IS_WANDB)
-            wandb_utils.logToWANDB (run, 'avg_grpo_clips', sum(avg_grpo_clips_since_last_commit)/len(avg_grpo_clips_since_last_commit), num_steps, IS_WANDB)
+            if loss_type == 'grpo_clip':
+                wandb_utils.logToWANDB (run, 'avg_grpo_clips', sum(avg_grpo_clips_since_last_commit)/len(avg_grpo_clips_since_last_commit), num_steps, IS_WANDB)
             losses_since_last_commit = [] #Resetting this list to accumulate losses for next epoch!
             avg_grpo_clips_since_last_commit = [] #Resetting this list that accumulates avg grpo losses for the batch!
             
