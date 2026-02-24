@@ -20,7 +20,7 @@ def dist_demo (rank, world_size):
         data = torch.randint (0, 10, (3,))
         print (f"data in rank {rank} before all-reduce = {data}")
 
-        work = dist.all_reduce (data, async_op=True) #non-blocking. so free to do anything now
+        work = dist.all_reduce (data, async_op=True, op=dist.ReduceOp.SUM) #non-blocking. so free to do anything now. default reduction op=SUM
         #do any compute here to mask compute and communication
         #if you don't want to do any overlap, just call async_op=False & remove the wait() below
         work.wait() #to ensure that the collection finishes
