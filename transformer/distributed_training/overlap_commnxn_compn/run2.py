@@ -7,8 +7,11 @@ import copy
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, DistributedSampler, Subset
 
+from ddp_overlap_indiv_params import DDP
+
 '''
-# This code is similar to naive DDP except that
+# This is a modular version of the run.py [using wrapper DDP class from ddp_overlap_indiv_params.py]
+# code is similar to naive DDP except that
 # it leverages the intuition that during backprop,
 # gradient for the parameters are computed sequentially (one layer at a time) from the back.
 # So as soon as the gradient is computed, all_reduce is done for that gradient. In parallel, the previous layers' 
@@ -30,19 +33,6 @@ class NN_toy (torch.nn.Module):
         x = self.lin2 (x)
         return x
 
-work_handles = [] #Copy-on-write. Each fork-ed process has its own copy!
-
-def post_grad_compn_hook (param):
-
-
-    #Here we can do an all_reduce on the gradient.
-    #While that is being done, we can go ahead and compute the gradient on the "prev" layer of the NN
-    with torch.no_grad():
-        handle = dist.all_reduce (param.grad, async_op= True, op = dist.ReduceOp.SUM)
-    #Note that after this operation, all gradient values still need to be divided by number of workers!
-    work_handles.append (handle)
-    #print (f"len of work handles in rank {dist.get_rank()} is {len(work_handles)}")
-
 
 def init (rank, world_size):
     #Each worker connects with a master and exchanges their information (i.e., how they can be reached!)
@@ -63,22 +53,13 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
 
     try:
         nn = NN_toy (784, 1024, 10, device)
+        #Wrapper DDP
+        ddp_model = DDP (nn)
 
         #Rank 0 compares weights of no ddp!
         if rank == 0:
             nn_no_ddp = copy.deepcopy (nn)
 
-        #See naive_ddp/run.py for more details on why torch.no_grad() is used!
-        #Broadcast rank 0 model state!
-        with torch.no_grad():
-            for n, p in nn.named_parameters ():
-                dist.broadcast (p, src = 0, async_op = False)
-
-        #'''
-        #Check if fields match across the ranks by eye-balling
-        for p in nn.named_parameters ():
-            print (f"nn.named parameter in rank {rank} = {p}")
-        #'''
             
         #Now the models of the workers are all in sync!
         #Each worker deals with its own section of the data. Use DistributedSampler for it
@@ -103,9 +84,6 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
 
         print (f"in rank {rank} # of batches = {len(loader)}")
 
-        #Register the callback that will get called when the gradient of a parameter gets computed.
-        for p in nn.parameters():
-            p.register_post_accumulate_grad_hook (post_grad_compn_hook)
 
 
         for epoch in range (num_epochs):
@@ -120,8 +98,10 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
                 X = X.squeeze(1) #[worker_batch_size,28,28]
                 X = X.reshape(X.shape[0], X.shape[-1]* X.shape[-2]) #[worker_batch_size, 784]
 
+               
+
                 #Pass it through the model
-                logits = nn(X)
+                logits = ddp_model(X)
 
                 #Compute loss!
                 loss = criterion (logits, Y)
@@ -129,13 +109,8 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
 
                 loss.backward()
 
-
-                for work_handle in work_handles:
-                    work_handle.wait()
-                for param in nn.parameters():
-                    param.grad.div_(world_size) #Divide the accumulated gradient!
-
-                work_handles.clear() #Reset the waiting list to be empty for next batch
+                #Ensure all gradients in the workers are in sync
+                ddp_model.finish_gradient_synchronization()
 
                 optimizer.step()
 
