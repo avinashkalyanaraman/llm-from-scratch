@@ -46,9 +46,21 @@ class DDP (torch.nn.Module):
     #Flushes the current bucket and resets stats
     def flushBucket (self):
 
+        '''
         for tensor in self.constituent_tensors:
             dist.all_reduce (tensor, op = dist.ReduceOp.SUM, async_op = False)
             tensor.div_(dist.get_world_size())
+        '''    
+        
+        #1D tensor having all the contents of grad tensors of this bucket flattened
+        flattened_agg_grad_tensor = torch._utils._flatten_dense_tensors (self.constituent_tensors) 
+        dist.all_reduce (flattened_agg_grad_tensor, op = dist.ReduceOp.SUM) #AVG works directly. but no 'gloo' support
+        flattened_agg_grad_tensor.div_(dist.get_world_size()) #in-place
+
+        self.new_constituent_tensors = torch._utils._unflatten_dense_tensors (flattened_agg_grad_tensor, 
+                                                                          self.constituent_tensors)
+        for old, new in zip (self.constituent_tensors, self.new_constituent_tensors):
+            old.copy_(new)
 
         #Reset bucket stats!
         self.current_bucket_size = 0 
