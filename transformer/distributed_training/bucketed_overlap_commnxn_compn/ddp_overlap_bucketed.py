@@ -32,6 +32,16 @@ class DDP (torch.nn.Module):
         self.constituent_tensors = []
         self.current_bucket_size = 0
 
+        #List of tensors of each bucket.
+        # This tracks the grad tensors, and 
+        # aids in copying back to the grad-tensors after asynchrnous all-reduce
+
+        self.all_buckets = [] #[ [tensor1 of bucket1, tensor2 of bucket1...],
+                                # [tensor1 of bucket2, tensor2 of bucket2...],
+                                # [tensor1 of bucket3, tensor2 of bucket3...] ]
+        self.all_transfers = [] #[ [flattened list of bucket1],
+                                #   [ flattened list of bucket2] ...]
+
         self.work_handles = [] #Stores the handles of the async commxn tasks [per-process]
 
         #Broadcast rank-0 state to all nodes!
@@ -43,14 +53,9 @@ class DDP (torch.nn.Module):
         for p in self.module.parameters():
             p.register_post_accumulate_grad_hook (self.post_grad_compn_hook)
 
-    #Flushes the current bucket and resets stats
-    def flushBucket (self):
-
-        '''
-        for tensor in self.constituent_tensors:
-            dist.all_reduce (tensor, op = dist.ReduceOp.SUM, async_op = False)
-            tensor.div_(dist.get_world_size())
-        '''    
+    #Flushes the current bucket and resets stats. Syncrhonously done.
+    #Just for book-keeping purposes. Unused.
+    def flushBucketSync (self):    
         
         #1D tensor having all the contents of grad tensors of this bucket flattened
         flattened_agg_grad_tensor = torch._utils._flatten_dense_tensors (self.constituent_tensors) 
@@ -61,6 +66,28 @@ class DDP (torch.nn.Module):
                                                                           self.constituent_tensors)
         for old, new in zip (self.constituent_tensors, self.new_constituent_tensors):
             old.copy_(new)
+
+        #Reset bucket stats!
+        self.current_bucket_size = 0 
+        self.constituent_tensors = []
+    
+    #The async method. Flushes the current bucket and resets stats
+    def flushBucket (self):    
+        
+        #All flushed/nothing to flush!
+        if len(self.constituent_tensors) == 0:
+            return
+
+        #Adding the list of current tensors to the bucket tracking list!
+        self.all_buckets.append (self.constituent_tensors)
+
+        #1D tensor having all the contents of grad tensors of this bucket flattened
+        flattened_agg_grad_tensor = torch._utils._flatten_dense_tensors (self.constituent_tensors)
+        self.all_transfers.append (flattened_agg_grad_tensor) #list of lists
+
+        work = dist.all_reduce (flattened_agg_grad_tensor, op = dist.ReduceOp.SUM, async_op=True) #AVG works directly. but no 'gloo' support
+        self.work_handles.append (work)
+
 
         #Reset bucket stats!
         self.current_bucket_size = 0 
@@ -102,13 +129,20 @@ class DDP (torch.nn.Module):
         
         #Flush any remaining gradient tensors
         self.flushBucket ()
-        return
-        
-        '''
-        for work_handle in self.work_handles:
+    
+        for work_handle, bucket, flattened_xfer in zip(self.work_handles, self.all_buckets, self.all_transfers):
             work_handle.wait()
-        for param in self.module.parameters():
-            param.grad.div_(dist.get_world_size()) #Divide the accumulated gradient!
+
+            #The given async transfer is complete!
+            flattened_xfer.div_(dist.get_world_size())
+
+            new_constituent_tensors = torch._utils._unflatten_dense_tensors (flattened_xfer, 
+                                                                          bucket)
+            #each element of bucket basically has a reference to a param.grad tensor
+            for old, new in zip (bucket, new_constituent_tensors):
+                old.copy_(new)
 
         self.work_handles.clear() #Reset the waiting list to be empty for next batch
-        '''
+        self.all_transfers.clear() #Reset buckets and transfers for next batch
+        self.all_buckets.clear() 
+        
