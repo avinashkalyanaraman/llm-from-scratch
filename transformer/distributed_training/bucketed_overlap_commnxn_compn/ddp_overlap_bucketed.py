@@ -55,7 +55,11 @@ class DDP (torch.nn.Module):
 
     #Flushes the current bucket and resets stats. Syncrhonously done.
     #Just for book-keeping purposes. Unused.
-    def flushBucketSync (self):    
+    def flushBucketSync (self): 
+
+        #All flushed/nothing to flush!
+        if len(self.constituent_tensors) == 0:
+            return   
         
         #1D tensor having all the contents of grad tensors of this bucket flattened
         flattened_agg_grad_tensor = torch._utils._flatten_dense_tensors (self.constituent_tensors) 
