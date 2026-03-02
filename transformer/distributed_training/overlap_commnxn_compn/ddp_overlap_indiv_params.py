@@ -5,7 +5,17 @@ import torch.distributed as dist
 This class wraps an arbitrary pytorch nn.Module.
 It handles 
     (i) Broadcasting rank 0 weights upon init
-    (ii) Registering the handler to be invoked when gradients are computed
+    (ii) Registering the callback to be invoked when gradients are computed
+
+    (iii) Does the forward pass 
+    (iv) Handles the callback that gets invoked when loss.backward() is invoked!
+            The callback asynchronously sends the gradient of param just computed to other nodes
+    
+    (v) Before the optimizer.step() can be invoked, the finish_gradient_synchronization() ensures 
+        all gradients are in sync. It waits for the async processes to complete, and divides by
+        the total number of ranks to account for the gradient accumulation.
+
+
 Note that every process (rank) gets a DDP, but only rank 0 broadcasts
 '''
 
