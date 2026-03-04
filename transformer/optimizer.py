@@ -63,7 +63,7 @@ class SGD (torch.optim.Optimizer):
         hyperparams = {"lr" : lr}
         super().__init__(params, hyperparams)
     
-
+    @torch.no_grad()
     def step (self, closure=None): 
         loss = None if closure is None else closure()
 
@@ -91,6 +91,7 @@ class AdamW (torch.optim.Optimizer):
         hyperparams = {"lr" : lr, "beta1" : beta1, "beta2" : beta2, "epsilon": eps, "weight_decay" : weight_decay}
         super().__init__(params, hyperparams)
      
+    @torch.no_grad()
     def step (self, closure = None):
         loss = None if closure is None else closure()
 
