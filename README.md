@@ -14,8 +14,7 @@ This repo is organized as an experimentation workspace rather than a single pack
 - [`transformer/`](transformer): from-scratch Transformer modules, training/inference scripts, profiling, and distributed training experiments.
 - [`rl/`](rl): RL prerequisites + reasoning-focused SFT/GRPO workflows with vLLM and custom grading.
 
-### Other directories
-- `assignment1-basics/`, `assignment2-systems/`, `assignment5-alignment/`: assignment-related code kept in the same workspace.
+
 
 ## How The Pieces Connect
 
@@ -83,7 +82,3 @@ python run.py
 - `rl/reasoning` workflows use `vllm` and are written for CUDA multi-GPU setups (`cuda:0` + `cuda:1`).
 - `transformer/distributed_training` scripts use `torch.multiprocessing.spawn` and fixed localhost process-group settings.
 
-## Current Scope
-
-- `rl/alignment/` is currently empty.
-- No `rl/cartpole.py` exists; the CartPole script is `rl/prereqs/cartpole_test.py`.
