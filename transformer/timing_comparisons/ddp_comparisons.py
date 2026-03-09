@@ -112,7 +112,7 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
         elif ddp_type == 'overlap':
             ddp_model = DDP_OVERLAP (model)
         elif ddp_type == 'bucketedoverlap':
-            ddp_model = DDP_BUCKETEDOVERLAP (model)
+            ddp_model = DDP_BUCKETEDOVERLAP (model, 100)
         else:
             assert False , "Incorrect ddp_type; one of [naive, flattened, overlap, bucketedoverlap]"
 
@@ -137,8 +137,8 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
             if epoch >= warmups:
                 fw_runtimes.append (fw_runtime)
                 bp_runtimes.append (bp_runtime)
-                print (f"Rank : {rank} -- Fwd time = {fw_runtime}")
-                print (f"Rank : {rank} -- Backprop time = {bp_runtime}")
+                #print (f"Rank : {rank} -- Fwd time = {fw_runtime}")
+                #print (f"Rank : {rank} -- Backprop time = {bp_runtime}")
 
 
             #Update gradient!
