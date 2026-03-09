@@ -3,6 +3,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import copy
+from ddp import DDP
 
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, DistributedSampler, Subset
@@ -55,18 +56,10 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
         #Rank 0 compares weights of no ddp!
         if rank == 0:
             nn_no_ddp = copy.deepcopy (nn)
+        
+        #Wrapper DDP
+        ddp_model = DDP (nn)
 
-        #See naive_ddp/run.py for more details on why torch.no_grad() is used!
-        #Broadcast rank 0 model state!
-        with torch.no_grad():
-            for n, p in nn.named_parameters ():
-                dist.broadcast (p, src = 0, async_op = False)
-
-        #'''
-        #Check if fields match across the ranks by eye-balling
-        for p in nn.named_parameters ():
-            print (f"nn.named parameter in rank {rank} = {p}")
-        #'''
             
         #Now the models of the workers are all in sync!
         #Each worker deals with its own section of the data. Use DistributedSampler for it
@@ -105,7 +98,7 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
                 X = X.reshape(X.shape[0], X.shape[-1]* X.shape[-2]) #[worker_batch_size, 784]
 
                 #Pass it through the model
-                logits = nn(X)
+                logits = ddp_model(X)
 
                 #Compute loss!
                 loss = criterion (logits, Y)
@@ -113,18 +106,8 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
 
                 loss.backward()
 
-                agg_grad_tensors = [ele.grad for ele in nn.parameters()] #list having [param1_grad_tensor, param2_grad_tensor, ...]
-                flattened_agg_grad_tensor = torch._utils._flatten_dense_tensors (agg_grad_tensors) #1D tensor having all the contents of above
-                dist.all_reduce (flattened_agg_grad_tensor, op = dist.ReduceOp.SUM) #AVG works directly. but no 'gloo' support
-                flattened_agg_grad_tensor.div_(world_size) #in-place
-
-                #Let us unflatten it and set it to the gradients .
-                # For that we need to know the shapes from a reference tensor list : [agg_grad_tensors]
-                #It is just assigned to the same list as lhs value
-                agg_grad_tensors = torch._utils._unflatten_dense_tensors (flattened_agg_grad_tensor, agg_grad_tensors)
-                for p, acc_grad_tensor in zip (nn.parameters (), agg_grad_tensors):
-                    p.grad = acc_grad_tensor
-                       
+                #Ensure all gradients in the workers are in sync
+                ddp_model.finish_gradient_synchronization()
 
                 optimizer.step()
 

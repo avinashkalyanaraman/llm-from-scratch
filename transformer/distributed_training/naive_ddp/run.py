@@ -3,6 +3,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import copy
+from ddp import DDP
 
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, DistributedSampler, Subset
@@ -10,6 +11,7 @@ from torch.utils.data import DataLoader, DistributedSampler, Subset
 class NN_toy (torch.nn.Module):
     def __init__ (self, dim1, dim2, out, device = None):
         super().__init__()
+    
 
         self.lin1 = torch.nn.Linear (dim1, dim2, device=device)
         self.relu1 = torch.nn.ReLU ()
@@ -20,6 +22,7 @@ class NN_toy (torch.nn.Module):
         x = self.relu1(x)
         x = self.lin2 (x)
         return x
+
 
 def init (rank, world_size):
     #Each worker connects with a master and exchanges their information (i.e., how they can be reached!)
@@ -35,7 +38,7 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
 
     torch.manual_seed (42)
 
-    torch.set_default_dtype(torch.float32) #this just helps compare the algorithms and not let adamw "drift" soon when set to float64
+    torch.set_default_dtype(torch.float64) #this just helps compare the algorithms and not let adamw "drift" soon when set to float64
     init (rank, world_size) #Each worker now knows about others!
 
     try:
@@ -44,32 +47,10 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
         #Rank 0 compares weights of no ddp!
         if rank == 0:
             nn_no_ddp = copy.deepcopy (nn)
-
-        #Broadcast parameters from rank = 0 to all nodes!
-        '''
-        #Type 1:        
-
-        my_state_dict = nn.state_dict()
-        my_data = [my_state_dict] #To broadcast the state-dict, wrap it into a list. non broadcaster's my_data will get overwritten
-        dist.broadcast_object_list (my_data, src = 0) #broadcast will block on all nodes, and the my_data list on all nodes now is identical!
-        if rank != 0:
-            nn.load_state_dict(my_data[0])
-        '''
         
-        #Alternate way since Parameters is a subclass of Tensor. Can also broadcast as below!
-        with torch.no_grad(): #Without this: you will see a silent incorrect behavior warning 
-            # dist.broadcast performs an in-place write to Parameter tensors.
-            # Since Parameters require grad, we prevent autograd from tracking this non-differentiable operation.
-            # In the earlier case, load_state_dict is not treated as a grad op.
-            for p in nn.parameters():
-                dist.broadcast(p, src = 0, async_op=False)
+        #Wrapper DDP
+        ddp_model = DDP (nn)
 
-        #print (f"data in rank {rank} after all-reduce = {my_data[0]}")
-        '''
-        #Check if fields match across the ranks
-        for p in nn.named_parameters ():
-            print (f"nn.named parameter in rank {rank} = {p}")
-        '''
             
         #Now the models of the workers are all in sync!
         #Each worker deals with its own section of the data. Use DistributedSampler for it
@@ -88,21 +69,18 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
         )
 
         #if adamW use float64 to not let drift show up sooner.
-        #optimizer = torch.optim.AdamW ( nn.parameters(), lr = 1e-3, betas = (0.9, 0.999), eps=1e-8, weight_decay = 1e-2)
-        optimizer = torch.optim.SGD (nn.parameters(), lr = 1e-3)
+        optimizer = torch.optim.AdamW ( nn.parameters(), lr = 1e-3, betas = (0.9, 0.999), eps=1e-8, weight_decay = 1e-2)
+        #optimizer = torch.optim.SGD (nn.parameters(), lr = 1e-3)
         criterion = torch.nn.CrossEntropyLoss()
 
         print (f"in rank {rank} # of batches = {len(loader)}")
 
-        ddp_grads = [] #For debugging. 
-        #Stores the gradients of the parameters before every opt update in ddp setting!
 
         for epoch in range (num_epochs):
             print (f"Running epoch {epoch} in rank {rank}")
             for batchnum, (X, Y) in enumerate (loader):
-                X = X.to (device)#.to(torch.float64) #[worker_batch_size,1, 28, 28]
+                X = X.to (device).to(torch.float64) #[worker_batch_size,1, 28, 28]
                 Y = Y.to (device) #[worker_batch_size,]
-
 
                 optimizer.zero_grad (set_to_none= True)
 
@@ -111,7 +89,7 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
                 X = X.reshape(X.shape[0], X.shape[-1]* X.shape[-2]) #[worker_batch_size, 784]
 
                 #Pass it through the model
-                logits = nn(X)
+                logits = ddp_model(X)
 
                 #Compute loss!
                 loss = criterion (logits, Y)
@@ -119,21 +97,13 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
 
                 loss.backward()
 
-                with torch.no_grad(): #unnecessary since p.grad has requires_grad = False
-                    for n, p in nn.named_parameters():
-                        dist.all_reduce (p.grad, op = dist.ReduceOp.SUM) #AVG works directly. but no 'gloo' support
-                        p.grad.div_(world_size) #in-place
-
-                        #if epoch == num_epochs - 1:
-                            #print (f"p.grad for param = {n} in rank {rank} in epoch {epoch}= {p.grad}")
+                #Ensure all gradients in the workers are in sync
+                ddp_model.finish_gradient_synchronization()
 
                 optimizer.step()
-                
-                #Store the gradients that were used to update the parameters!
-                ddp_grads.append ({n: p.grad.detach().cpu().clone() for n, p in nn.named_parameters()})
 
-            
-        #Verify ddp in process 0!        
+        
+        #Verify flattened_ddp in process 0!        
         if rank == 0:
             print (f"Verifying ddp on rank = {rank}")
             loader_standalone = DataLoader(
@@ -142,13 +112,11 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
                 shuffle=False 
             )
 
-            base_grads = [] #contains the gradients of parameters at every non-ddp optimizer step
-
-            #optimizer_noddp = torch.optim.AdamW (nn_no_ddp.parameters(), lr = 1e-3, betas = (0.9, 0.999), eps=1e-8, weight_decay = 1e-2)
-            optimizer_noddp = torch.optim.SGD (nn_no_ddp.parameters(), lr = 1e-3) 
+            optimizer_noddp = torch.optim.AdamW (nn_no_ddp.parameters(), lr = 1e-3, betas = (0.9, 0.999), eps=1e-8, weight_decay = 1e-2)
+            #optimizer_noddp = torch.optim.SGD (nn_no_ddp.parameters(), lr = 1e-3) 
             for epoch in range (num_epochs):
                 for batchnum, (X,Y) in enumerate (loader_standalone):
-                    X = X.to (device)#.to(torch.float64) #[worker_batch_size,1, 28, 28]
+                    X = X.to (device).to(torch.float64) #[worker_batch_size,1, 28, 28]
                     Y = Y.to (device) #[worker_batch_size]
 
 
@@ -158,19 +126,6 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
                     X = X.squeeze(1) #[worker_batch_size*world_size,28,28]
                     X = X.reshape(X.shape[0], X.shape[-1]* X.shape[-2]) #[worker_batch_size*world_size, 784]
 
-                    '''
-                    #Let us get "worker" granularity chunks
-                    X_chunks = X.chunk(world_size, dim=0) #tuple of world_size ([worker_batch_size, 784], [worker_batch_size, 784]...)
-                    Y_chunks = Y.chunk(world_size, dim=0) #tuple of world_size ([worker_batch_size,], [worker_batch_size,] ...)
-
-                    for i in range(world_size):
-                        logits = nn_no_ddp(X_chunks[i])
-                        loss_i = criterion(logits, Y_chunks[i]) # mean over one batch
-                        (loss_i / world_size).backward() # avg across ranks
-
-                    optimizer_noddp.step()
-
-                    '''
                     #Pass it through the model
                     logits = nn_no_ddp(X)
 
@@ -181,38 +136,16 @@ def dist_demo (rank, world_size, train_dataset, num_epochs, worker_batch_size, d
                     loss.backward()
                     optimizer_noddp.step()
                     
-                    #Store the gradients of parameters at every optimizer step
-                    base_grads.append ({n: p.grad.detach().cpu().clone() for n, p in nn_no_ddp.named_parameters()})
-        
-
-            assert len(base_grads) == len(ddp_grads)
-            print_grad_diff = True 
-            #Whether we need to print difference in gradient values
-            # of parameter between ddp and non-ddp
-
-            if print_grad_diff:
-                for ddp_grad, base_grad in zip(ddp_grads, base_grads):
-                    for n in ddp_grad:
-                        diff = (ddp_grad[n] - base_grad[n]).abs().max().item()
-                        print("grad diff", n, diff)
-                    print ("-------------------"*5)
                     
-                sd1 = nn.state_dict()
-                sd2 = nn_no_ddp.state_dict()
-                for k in sd1:
-                    if not torch.allclose(sd1[k], sd2[k], atol=1e-5, rtol=1e-4):
-                        print("max param mismatch", k, (sd1[k] - sd2[k]).abs().max().item())
-                        break
             
             #Now we compare weights of nn_noddp and nn (with ddp) on rank0
             for p1, p2 in zip(nn.parameters(), nn_no_ddp.parameters()):
                 assert torch.allclose(p1, p2, atol=1e-5, rtol=1e-4)
-
                 
 
-                    
     finally:
         dist.destroy_process_group()
+
 
 if __name__ == '__main__':
     world_size = 6

@@ -123,7 +123,6 @@ class DDP (torch.nn.Module):
         #add the current grad tensor to the filling bucket
         self.addToBucket (current_grad_tensor)
         
-
         
     def forward (self, x):
         return self.module (x)
