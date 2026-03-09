@@ -18,7 +18,6 @@ from distributed_training.flattened_ddp.ddp import DDP as DDP_FLATTENED
 from distributed_training.overlap_commnxn_compn.ddp_overlap_indiv_params import DDP as DDP_OVERLAP
 from distributed_training.bucketed_overlap_commnxn_compn.ddp_overlap_bucketed import DDP as DDP_BUCKETEDOVERLAP
 
-torch.manual_seed(42)
 
 def getCrossEntropyRHS (q):
     
@@ -69,15 +68,15 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
                        worker_batchsize, num_layers,isTorchCompile, epochs, warmups,
                         vocab_size, ddp_type):
 
-    torch.manual_seed (42)
+    torch.manual_seed (42 + rank)
 
     init (rank, world_size) #Each worker now knows about others!
 
     try:
-        print (f" in rank {rank}")
+        print (f"in rank {rank}")
         device = torch.device(f"cuda:{rank}")
         torch.cuda.set_device (rank) #Sets the default (cuda) device for the current process
-
+        torch.set_float32_matmul_precision("high")
 
         #Create a random set of input and output for each process spawned
         sample_input = torch.randint ( 0, vocab_size, (worker_batchsize, seqlen), device = device)
@@ -104,6 +103,7 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
 
         fw_runtimes = []
         bp_runtimes = []
+        iteration_runtimes = []
 
         if ddp_type == 'naive':
             ddp_model = DDP_NAIVE (model)
@@ -118,6 +118,7 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
 
 
         for epoch in range(epochs):
+            start = timeit.default_timer()
 
             #zero-out gradient
             optim.zero_grad(set_to_none = True)
@@ -143,12 +144,17 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
             #Update gradient!
             optim.step()
 
+            end = timeit.default_timer()
+            torch.cuda.synchronize(device) #Synchronize for timing after optimizer step!
+            iteration_runtimes.append (end-start)
+
 
         print (f"Rank : {rank} -- Mean fw pass after warmup of {warmups} steps= {statistics.mean(fw_runtimes)} s")
         print (f"Rank : {rank} -- stdev fw pass after warmup of {warmups} steps= {statistics.stdev(fw_runtimes)} s")
         print (f"Rank : {rank} -- Mean bw pass after warmup of {warmups} steps= {statistics.mean(bp_runtimes)} s")
         print (f"Rank : {rank} -- stdev bw pass after warmup of {warmups} steps= {statistics.stdev(bp_runtimes)} s")
-
+        print (f"Rank : {rank} -- Mean iteration time after warmup of {warmups} steps= {statistics.mean(iteration_runtimes)} s")
+        print (f"Rank : {rank} -- stdev iteration time warmup of {warmups} steps= {statistics.stdev(iteration_runtimes)} s")
 
 
     finally:
@@ -169,7 +175,7 @@ if __name__ == '__main__' :
     parser.add_argument("--batchsize", type=int, default=1, help="batchsize")
     parser.add_argument("--num_layers", type=int, default=1, help="num of layers")
     parser.add_argument("--epochs", type=int, default=1, help="num of epochs")
-    parser.add_argument("--warmups", type=int, default=1, help="num of warmup epochs before timing!")
+    parser.add_argument("--warmups", type=int, default=5, help="num of warmup epochs before timing!")
     parser.add_argument("--tcompile", type=bool, default=False, help="torch compile?")
     parser.add_argument("--vocabsize", type=int, default=50304, help="vocab size of the tokenizer used!")
     parser.add_argument("--num_workers", type=int, default=1, help="# of workers (world size)")
