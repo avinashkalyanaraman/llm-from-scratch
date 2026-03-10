@@ -114,6 +114,7 @@ class DDP (torch.nn.Module):
             #Flush this grad tensor. Add to bucket and flush it
             self.addToBucket (current_grad_tensor)
             self.flushBucket()
+            return
             
 
         #Does the addn of this tensor exceed max bucket size. if so flush existing bucket!
