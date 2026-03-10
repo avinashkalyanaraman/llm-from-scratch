@@ -104,6 +104,7 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
         fw_runtimes = []
         bp_runtimes = []
         iteration_runtimes = []
+        sync_runtimes = []
 
         if ddp_type == 'naive':
             ddp_model = DDP_NAIVE (model)
@@ -132,27 +133,33 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
             #Run backprop!
             _, bp_runtime = benchmark (loss.backward, args = None, device=device)
 
-            #print (f"loss after epoch {epoch} = {loss.item()}")
+
+            #Ensure all gradients in the workers are in sync
+            _, sync_runtime = benchmark(ddp_model.finish_gradient_synchronization, args = None, device=device)
+
+            #Update gradient!
+            optim.step()
+            torch.cuda.synchronize(device)
+            end = timeit.default_timer()
 
             if epoch >= warmups:
                 fw_runtimes.append (fw_runtime)
                 bp_runtimes.append (bp_runtime)
-                #print (f"Rank : {rank} -- Fwd time = {fw_runtime}")
-                #print (f"Rank : {rank} -- Backprop time = {bp_runtime}")
+                sync_runtimes.append (sync_runtime)
+                iteration_runtimes.append (end-start)
 
 
-            #Update gradient!
-            optim.step()
-
-            end = timeit.default_timer()
-            torch.cuda.synchronize(device) #Synchronize for timing after optimizer step!
-            iteration_runtimes.append (end-start)
-
+        
 
         print (f"Rank : {rank} -- Mean fw pass after warmup of {warmups} steps= {statistics.mean(fw_runtimes)} s")
         print (f"Rank : {rank} -- stdev fw pass after warmup of {warmups} steps= {statistics.stdev(fw_runtimes)} s")
+
         print (f"Rank : {rank} -- Mean bw pass after warmup of {warmups} steps= {statistics.mean(bp_runtimes)} s")
         print (f"Rank : {rank} -- stdev bw pass after warmup of {warmups} steps= {statistics.stdev(bp_runtimes)} s")
+
+        print (f"Rank : {rank} -- Mean sync time after warmup of {warmups} steps= {statistics.mean(sync_runtimes)} s")
+        print (f"Rank : {rank} -- stdev synx time warmup of {warmups} steps= {statistics.stdev(sync_runtimes)} s")
+
         print (f"Rank : {rank} -- Mean iteration time after warmup of {warmups} steps= {statistics.mean(iteration_runtimes)} s")
         print (f"Rank : {rank} -- stdev iteration time warmup of {warmups} steps= {statistics.stdev(iteration_runtimes)} s")
 
