@@ -48,7 +48,10 @@ def getCrossEntropyLossFromClass (p,q):
 
 def benchmark (func, args=None, device=None):
     start = timeit.default_timer()
-    retval = func(args)
+    if args is None:
+        retval = func()
+    else:
+        retval = func(args)
     torch.cuda.synchronize(device) 
     end = timeit.default_timer()
     runtime = end-start
