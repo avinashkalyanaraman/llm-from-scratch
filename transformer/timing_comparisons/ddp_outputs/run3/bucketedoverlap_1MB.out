@@ -1,15 +1,19 @@
 in rank 0
 total # trainable params in bucketedoverlap model = 148.061952M
-Rank : 0 -- Mean fw pass after warmup of 5 steps= 1.132837584167719 s
-Rank : 0 -- stdev fw pass after warmup of 5 steps= 0.06652704658851774 s
-Rank : 0 -- Mean bw pass after warmup of 5 steps= 0.23778287140652538 s
-Rank : 0 -- stdev bw pass after warmup of 5 steps= 0.051806035520625085 s
-Rank : 0 -- Mean iteration time after warmup of 5 steps= 1.3782018688817819 s
-Rank : 0 -- stdev iteration time warmup of 5 steps= 0.042803468000051796 s
+Rank : 0 -- Mean fw pass after warmup of 5 steps= 1.1592943450808526 s
+Rank : 0 -- stdev fw pass after warmup of 5 steps= 0.05005758493449454 s
+Rank : 0 -- Mean bw pass after warmup of 5 steps= 0.22331878984346987 s
+Rank : 0 -- stdev bw pass after warmup of 5 steps= 0.04680574639186685 s
+Rank : 0 -- Mean sync time after warmup of 5 steps= 0.0014190251752734184 s
+Rank : 0 -- stdev synx time warmup of 5 steps= 0.00013339329977358068 s
+Rank : 0 -- Mean iteration time after warmup of 5 steps= 1.3962690809369087 s
+Rank : 0 -- stdev iteration time warmup of 5 steps= 0.02066552104942912 s
 in rank 1
-Rank : 1 -- Mean fw pass after warmup of 5 steps= 1.141412681415677 s
-Rank : 1 -- stdev fw pass after warmup of 5 steps= 0.05623968090036527 s
-Rank : 1 -- Mean bw pass after warmup of 5 steps= 0.228990573938936 s
-Rank : 1 -- stdev bw pass after warmup of 5 steps= 0.0517155654870609 s
-Rank : 1 -- Mean iteration time after warmup of 5 steps= 1.3782281861950954 s
-Rank : 1 -- stdev iteration time warmup of 5 steps= 0.042747837439748665 s
+Rank : 1 -- Mean fw pass after warmup of 5 steps= 1.1357719129696489 s
+Rank : 1 -- stdev fw pass after warmup of 5 steps= 0.058146058405721845 s
+Rank : 1 -- Mean bw pass after warmup of 5 steps= 0.24596765600144863 s
+Rank : 1 -- stdev bw pass after warmup of 5 steps= 0.05219987263234825 s
+Rank : 1 -- Mean sync time after warmup of 5 steps= 0.00160481670871377 s
+Rank : 1 -- stdev synx time warmup of 5 steps= 0.00011616003380379504 s
+Rank : 1 -- Mean iteration time after warmup of 5 steps= 1.3962743393145503 s
+Rank : 1 -- stdev iteration time warmup of 5 steps= 0.02066013146461156 s
