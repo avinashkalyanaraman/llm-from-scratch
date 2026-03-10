@@ -66,7 +66,7 @@ def init (rank, world_size):
 
 def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads, 
                        worker_batchsize, num_layers,isTorchCompile, epochs, warmups,
-                        vocab_size, ddp_type):
+                        vocab_size, ddp_type, bucketsize):
 
     torch.manual_seed (42 + rank)
 
@@ -112,7 +112,7 @@ def dist_benchmarking (rank, world_size, lr, beta1, beta2,d_model, seqlen, heads
         elif ddp_type == 'overlap':
             ddp_model = DDP_OVERLAP (model)
         elif ddp_type == 'bucketedoverlap':
-            ddp_model = DDP_BUCKETEDOVERLAP (model, 100)
+            ddp_model = DDP_BUCKETEDOVERLAP (model, bucketsize)
         else:
             assert False , "Incorrect ddp_type; one of [naive, flattened, overlap, bucketedoverlap]"
 
@@ -180,7 +180,7 @@ if __name__ == '__main__' :
     parser.add_argument("--vocabsize", type=int, default=50304, help="vocab size of the tokenizer used!")
     parser.add_argument("--num_workers", type=int, default=1, help="# of workers (world size)")
     parser.add_argument("--type", type=str, default="bucketedoverlap", help="[naive, flattened, overlap, bucketedoverlap]")
-
+    parser.add_argument("--bucketsize", type=int, default=10, help="bucketsize for bucketed overlap in MB")
 
     args = parser.parse_args()
 
@@ -199,6 +199,7 @@ if __name__ == '__main__' :
     vocab_size = args.vocabsize
     ddp_type = args.type
     num_workers = args.num_workers
+    bucketsize = args.bucketsize
 
     assert batchsize % num_workers == 0 , "Batchsize should be equally divisible by # workers"
     worker_batchsize = batchsize // num_workers
@@ -213,7 +214,7 @@ if __name__ == '__main__' :
     mp.spawn (fn = dist_benchmarking, args = (num_workers,lr, beta1, beta2,
                                               d_model, seqlen, heads, worker_batchsize,
                                                num_layers,isTorchCompile, epochs,
-                                                warmups, vocab_size, ddp_type
+                                                warmups, vocab_size, ddp_type, bucketsize
                                                 ), nprocs = num_workers, join=True)
     
     
