@@ -1,0 +1,15 @@
+in rank 1
+Rank : 1 -- Mean fw pass after warmup of 5 steps= 0.4091228097677231 s
+Rank : 1 -- stdev fw pass after warmup of 5 steps= 0.06551549437256897 s
+Rank : 1 -- Mean bw pass after warmup of 5 steps= 0.219253561347723 s
+Rank : 1 -- stdev bw pass after warmup of 5 steps= 0.03570711623999032 s
+Rank : 1 -- Mean iteration time after warmup of 5 steps= 0.6549159096709142 s
+Rank : 1 -- stdev iteration time warmup of 5 steps= 0.12621323990341088 s
+in rank 0
+total # trainable params in bucketedoverlap model = 148.061952M
+Rank : 0 -- Mean fw pass after warmup of 5 steps= 0.4151044643856585 s
+Rank : 0 -- stdev fw pass after warmup of 5 steps= 0.07809150939835893 s
+Rank : 0 -- Mean bw pass after warmup of 5 steps= 0.21103453943505884 s
+Rank : 0 -- stdev bw pass after warmup of 5 steps= 0.026391535490846853 s
+Rank : 0 -- Mean iteration time after warmup of 5 steps= 0.6549531437611829 s
+Rank : 0 -- stdev iteration time warmup of 5 steps= 0.12413847821648216 s
