@@ -1,0 +1,15 @@
+in rank 1
+Rank : 1 -- Mean fw pass after warmup of 5 steps= 0.09109236527467146 s
+Rank : 1 -- stdev fw pass after warmup of 5 steps= 0.0022470403320005677 s
+Rank : 1 -- Mean bw pass after warmup of 5 steps= 0.1970522196777165 s
+Rank : 1 -- stdev bw pass after warmup of 5 steps= 0.00011437001223231181 s
+Rank : 1 -- Mean iteration time after warmup of 5 steps= 0.30990819689274457 s
+Rank : 1 -- stdev iteration time warmup of 5 steps= 0.06621918664393277 s
+in rank 0
+total # trainable params in naive model = 148.061952M
+Rank : 0 -- Mean fw pass after warmup of 5 steps= 0.09071461003273726 s
+Rank : 0 -- stdev fw pass after warmup of 5 steps= 0.0041265610187665586 s
+Rank : 0 -- Mean bw pass after warmup of 5 steps= 0.19754676799755544 s
+Rank : 0 -- stdev bw pass after warmup of 5 steps= 0.0005785264601459396 s
+Rank : 0 -- Mean iteration time after warmup of 5 steps= 0.31344976209802555 s
+Rank : 0 -- stdev iteration time warmup of 5 steps= 0.07789016540717511 s
