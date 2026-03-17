@@ -1,0 +1,6 @@
+How to run:
+
+nsys profile -o ddp_profile_naive python3 ddp_nvtx_runs_transformer.py --d_model=768 --heads=16 --batchsize=64 --num_layers=10 --num_workers=2 --seqlen=600 --epochs=15 --type=naive
+nsys profile -o ddp_profile_flat python3 ddp_nvtx_runs_transformer.py --d_model=768 --heads=16 --batchsize=64 --num_layers=10 --num_workers=2 --seqlen=600 --epochs=15 --type=flattened
+nsys profile -o ddp_profile_overlap python3 ddp_nvtx_runs_transformer.py --d_model=768 --heads=16 --batchsize=64 --num_layers=10 --num_workers=2 --seqlen=600 --epochs=15 --type=overlap
+nsys profile -o ddp_profile_bucketedoverlap python3 ddp_nvtx_runs_transformer.py --d_model=768 --heads=16 --batchsize=64 --num_layers=10 --num_workers=2 --seqlen=600 --epochs=15 --type=bucketedoverlap
