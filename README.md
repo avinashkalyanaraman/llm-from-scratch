@@ -18,7 +18,7 @@ This repository is a code-first workspace for building language model systems fr
 
 The tokenizer directory currently supports two main paths:
 
-- A custom BPE trainer in [`tokenizer/tokenizer.py`](tokenizer/tokenizer.py) with optional parallel pretokenization and optional in-place pair-count updates, and produces `merges and vocab`.
+- A custom BPE trainer in [`tokenizer/tokenizer.py`](tokenizer/tokenizer.py) with optional parallel pretokenization, optional in-place pair-count updates, and pickle export for learned vocabulary and merges.
 - A GPT-2 based tokenizer in [`tokenizer/off_the_shelf_tokenizer.py`](tokenizer/off_the_shelf_tokenizer.py) that safely tokenizes large UTF-8 files in binary chunks and writes token IDs to `.npy`.
 
 Example commands:
@@ -27,23 +27,25 @@ Example commands:
 cd tokenizer
 
 python off_the_shelf_tokenizer.py \
-  --input data/TinyStoriesV2-GPT4-valid.txt \
+  --input path/to/corpus.txt \
   --out-npy tiny_valid.npy \
   --special "<|endoftext|>" "<|assistant|>" \
   --print-preview
 
 python tokenizer.py \
-  --tfile data/TinyStoriesV2-GPT4-valid.txt \
+  --tfile path/to/corpus.txt \
   --vocabsize 8000 \
   --inplace \
   --parallel \
   --store
 
 python tokenizer.py \
-  --tfile data/TinyStoriesV2-GPT4-valid.txt \
+  --tfile path/to/corpus.txt \
   --vocabsize 2048 \
   --compare
 ```
+
+Large corpora and generated `.npy` files are typically kept local and are not tracked in Git.
 
 Outputs produced by the tokenizer workflow include:
 

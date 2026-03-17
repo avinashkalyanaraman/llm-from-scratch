@@ -30,13 +30,15 @@ The tokenizer modules use local imports, so run them from [`tokenizer/`](./):
 cd tokenizer
 ```
 
+Large corpus files under `data/` and generated `.npy` outputs are intentionally kept out of version control. The commands below assume you provide your own local UTF-8 text file path.
+
 ## Workflow 1: Tokenize A Corpus With GPT-2
 
 [`off_the_shelf_tokenizer.py`](off_the_shelf_tokenizer.py) is the fastest path for producing token ID arrays for downstream model training.
 
 ```bash
 python off_the_shelf_tokenizer.py \
-  --input data/TinyStoriesV2-GPT4-valid.txt \
+  --input path/to/corpus.txt \
   --out-npy tiny_valid.npy \
   --special "<|endoftext|>" "<|assistant|>" \
   --print-preview
@@ -67,7 +69,7 @@ Example:
 
 ```bash
 python tokenizer.py \
-  --tfile data/TinyStoriesV2-GPT4-valid.txt \
+  --tfile path/to/corpus.txt \
   --vocabsize 8000 \
   --inplace \
   --parallel \
@@ -112,13 +114,16 @@ Current expectations:
 
 If you generated artifacts with `tokenizer.py --store`, the files written are `vocab.pkl` and `merges.pkl`. Rename them to the expected filenames or update the script before running the encoder/decoder utility.
 
-## Data And Artifacts
+## Local Inputs And Outputs
 
-This directory currently includes:
+Typical local inputs:
 
-- `data/TinyStoriesV2-GPT4-train.txt`
-- `data/TinyStoriesV2-GPT4-valid.txt`
-- `tinystoriesV2_train_tokenized.npy`
-- `tinystoriesV2_valid_tokenized.npy`
+- one or more UTF-8 text corpora, often placed under `tokenizer/data/`
+- optional special tokens such as `<|endoftext|>` and task-specific markers
 
-These `.npy` arrays are suitable for downstream transformer training workflows in the repository.
+Typical generated outputs:
+
+- `.npy` token ID arrays from [`off_the_shelf_tokenizer.py`](off_the_shelf_tokenizer.py)
+- `vocab.pkl` and `merges.pkl` from [`tokenizer.py`](tokenizer.py) when `--store` is enabled
+
+These large datasets and generated artifacts are usually gitignored to avoid inflating repository size.
