@@ -27,6 +27,8 @@ A from-scratch PyTorch Transformer stack with:
 - `utils.py`: stable softmax + scaled dot-product attention + basic unit tests.
 
 ### Profiling and benchmarking
+- [`nvtx_runs/README.md`](nvtx_runs/README.md): guide to the CUDA NVTX profiling scripts and tracked profiling notes.
+- [`timing_comparisons/README.md`](timing_comparisons/README.md): guide to the timing benchmarks and tracked DDP timing outputs.
 - `nvtx_runs/run.py`: CUDA-only training trace with NVTX ranges (supports optional stream overlap path).
 - `nvtx_runs/stream_comparison.py`: compares single-stream vs explicit copy-stream overlap.
 - `timing_comparisons/linear_comparison.py`: compares three linear forward implementations.
@@ -109,6 +111,11 @@ Notes:
 - prompt string is currently hardcoded in script (`"tell me a story set in istanbul!"`).
 
 ## Profiling / Timing Scripts
+
+Detailed subdirectory guides:
+
+- [`nvtx_runs/README.md`](nvtx_runs/README.md)
+- [`timing_comparisons/README.md`](timing_comparisons/README.md)
 
 ### NVTX trace (CUDA only)
 
@@ -208,10 +215,12 @@ Top-level:
 - `wandb_utils.py`
 
 NVTX:
+- `nvtx_runs/README.md`
 - `nvtx_runs/run.py`
 - `nvtx_runs/stream_comparison.py`
 
 Timing comparisons:
+- `timing_comparisons/README.md`
 - `timing_comparisons/linear_comparison.py`
 - `timing_comparisons/mha_comparison.py`
 

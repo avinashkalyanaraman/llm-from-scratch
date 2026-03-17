@@ -58,6 +58,8 @@ Additional details are documented in [`tokenizer/README.md`](tokenizer/README.md
 
 - [`tokenizer/README.md`](tokenizer/README.md)
 - [`transformer/README.md`](transformer/README.md)
+- [`transformer/nvtx_runs/README.md`](transformer/nvtx_runs/README.md)
+- [`transformer/timing_comparisons/README.md`](transformer/timing_comparisons/README.md)
 - [`transformer/distributed_training/README.md`](transformer/distributed_training/README.md)
 - [`rl/README.md`](rl/README.md)
 
