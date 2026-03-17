@@ -123,8 +123,8 @@ From `transformer/nvtx_runs`:
 
 ```bash
 cd nvtx_runs
-python run.py --tfile ../temp/temp.npy --steps 20
-python run.py --tfile ../temp/temp.npy --steps 20 --stream
+nsys profile -o transformer_train_trace python run.py --tfile ../temp/temp.npy --steps 20
+nsys profile -o transformer_train_stream_trace python run.py --tfile ../temp/temp.npy --steps 20 --stream
 ```
 
 `run.py` marks H2D, forward, loss, LR update, backward, clipping, and optimizer-step ranges via `torch.cuda.nvtx`.
@@ -134,8 +134,8 @@ python run.py --tfile ../temp/temp.npy --steps 20 --stream
 From `transformer/nvtx_runs`:
 
 ```bash
-python stream_comparison.py --tfile ../temp/temp.npy --steps 20
-python stream_comparison.py --tfile ../temp/temp.npy --steps 20 --stream
+nsys profile -o stream_comparison_trace python stream_comparison.py --tfile ../temp/temp.npy --steps 20
+nsys profile -o stream_comparison_stream_trace python stream_comparison.py --tfile ../temp/temp.npy --steps 20 --stream
 ```
 
 ### Linear micro-benchmark

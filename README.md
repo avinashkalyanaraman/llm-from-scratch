@@ -71,7 +71,7 @@ python test.py --sampling greedy
 
 #To profile the run
 cd nvtx_runs
-python run.py --tfile ../temp/temp.npy --steps 20
+nsys profile -o transformer_train_trace python run.py --tfile ../temp/temp.npy --steps 20
 ```
 
 Typical transformer workflow:

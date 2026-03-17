@@ -14,7 +14,7 @@ This directory contains CUDA profiling scripts for the transformer codebase. The
 - Run commands from [`transformer/nvtx_runs/`](./).
 - CUDA is required for all profiling scripts in this directory.
 - The scripts rely on local imports from the parent transformer package, so the working directory matters.
-- For Nsight Systems traces, run the Python commands through your local `nsys profile ...` workflow.
+- For Nsight Systems traces, run the commands through `nsys profile -o <trace_name> python ...`.
 
 ```bash
 cd transformer/nvtx_runs
@@ -46,8 +46,8 @@ python off_the_shelf_tokenizer.py \
 Example:
 
 ```bash
-python run.py --tfile ../temp/temp.npy --steps 20
-python run.py --tfile ../temp/temp.npy --steps 20 --stream
+nsys profile -o transformer_train_trace python run.py --tfile ../temp/temp.npy --steps 20
+nsys profile -o transformer_train_stream_trace python run.py --tfile ../temp/temp.npy --steps 20 --stream
 ```
 
 Useful arguments:
@@ -71,8 +71,8 @@ Notes:
 Example:
 
 ```bash
-python stream_comparison.py --tfile ../temp/temp.npy --steps 20
-python stream_comparison.py --tfile ../temp/temp.npy --steps 20 --stream
+nsys profile -o stream_comparison_trace python stream_comparison.py --tfile ../temp/temp.npy --steps 20
+nsys profile -o stream_comparison_stream_trace python stream_comparison.py --tfile ../temp/temp.npy --steps 20 --stream
 ```
 
 Useful arguments are the same as [`run.py`](run.py), including `--stream`, `--steps`, and the transformer shape parameters.
@@ -90,7 +90,7 @@ Notes:
 Example:
 
 ```bash
-python ddp_nvtx_runs_transformer.py \
+nsys profile -o ddp_nvtx_trace python ddp_nvtx_runs_transformer.py \
   --num_workers 2 \
   --batchsize 8 \
   --epochs 20 \
