@@ -37,7 +37,7 @@ A from-scratch PyTorch Transformer stack with:
 
 ### Distributed training
 - `distributed_training/...`: collective communication basics and custom DDP experiments.
-- Detailed guide: `distributed_training/README.md`.
+- Detailed guide: [`distributed_training/README.md`](distributed_training/README.md).
 
 ### Misc / demos
 - `module_list_learn.py`: demonstrates `list` vs `nn.ModuleList` parameter registration.
@@ -161,7 +161,7 @@ python mha_comparison.py --type baseline --epochs 5 --warmups 1
 ## Distributed Training
 
 A full walkthrough and per-experiment commands are in:
-- `transformer/distributed_training/README.md`
+- [`transformer/distributed_training/README.md`](distributed_training/README.md)
 
 Highlights covered there:
 - collectives basics (`all_reduce`, `broadcast`, `reduce_scatter`)
