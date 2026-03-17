@@ -1,0 +1,6 @@
+For vocabsize of 2048, on an M1
+
+in-place = True  parallel = True took 25.9156 seconds
+in-place = True  parallel = False took 27.2148 seconds
+in-place = False  parallel = True took 35.2212 seconds
+in-place = False  parallel = False took 37.0267 seconds

@@ -5,6 +5,7 @@ import time
 from collections import defaultdict
 import filehandler   
 import settings 
+import argparse
 
 
 def init_vocab():
@@ -64,7 +65,6 @@ def merge(tokens_dict, max_pair, replacement, in_place_update, pair_counts):
             pretokens_of_interest.append ( (tuple(new_token), count))
     
     if (in_place_update):
-        #print (f"updated_pretokens. = {updated_pretokens}")
         
         #Lets update the pair-counts based on updated_pretokens!
         #The five update rules are:
@@ -78,8 +78,8 @@ def merge(tokens_dict, max_pair, replacement, in_place_update, pair_counts):
         
         #go through each pretoken_of_interest and update pair_cnt accordingly
         for  pretoken_of_interest in pretokens_of_interest: #( (111,110,101), 2)
-            #print (f"pti = {pretoken_of_interest}")
-            update_pair_counts(pair_counts, pretoken_of_interest[0], pretoken_of_interest[1], replacement, max_pair)         
+            update_pair_counts(pair_counts, pretoken_of_interest[0], 
+                               pretoken_of_interest[1], replacement, max_pair)         
         
         pair_counts[max_pair] = 0 #a
 
@@ -87,7 +87,9 @@ def merge(tokens_dict, max_pair, replacement, in_place_update, pair_counts):
 
 
 def split_based_on_specialtokens (special_tokens, text, incl_special_token=False):
-    pattern = '|'.join ([re.escape(spl_tok) for spl_tok in special_tokens]) #escapes each special token and concatenates them with |
+
+    #escapes each special token and concatenates them with |
+    pattern = '|'.join ([re.escape(spl_tok) for spl_tok in special_tokens]) 
     if incl_special_token :
         pattern = "(" + pattern + ")"
     texts = re.split(pattern, text) #splits based on any matching special token (the pattern formed above)
@@ -171,7 +173,6 @@ def parallel_pretokenize(filepath, token_counts, gpt2_pat, special_tokens):
         for k,v in item.items():
             token_counts[k] = token_counts.get(k,0) + v
         
-    #print (f"token counts = {token_counts}")
 
 
 def tokenize (filepath, gpt2_pat, vocab_size, special_tokens, in_place_update, is_parallel):
@@ -191,17 +192,13 @@ def tokenize (filepath, gpt2_pat, vocab_size, special_tokens, in_place_update, i
     num_epochs = vocab_size - (len(vocab) + len(special_tokens))
 
     for epoch in range(num_epochs):
-        if (epoch % 100) == 0:
+        if (epoch % 500) == 0:
             print (f"On epoch {epoch}")
 
         #Lets find the most common pair first
         if (epoch == 0) or (in_place_update == False): #if in-place, pair_counts already updated!
             pair_counts = get_count(token_counts)
 
-        pair_counts_sorted = {k: v for k, v in sorted(pair_counts.items(), key=lambda item: item[1], reverse=True)}
-
-
-        #print (f"pair counts = {pair_counts}")
         max_pair, max_cnt =  max(pair_counts.items(), key=lambda item: (item[1], item[0]))
 
         #Having found the most common pair, our goal now is to add the new word to
@@ -218,7 +215,6 @@ def tokenize (filepath, gpt2_pat, vocab_size, special_tokens, in_place_update, i
         #print (f"pre merge {token_counts}")
         token_counts = merge(token_counts, max_pair, replacement, in_place_update, pair_counts) 
         #print (f"post merge {token_counts}")
-        #print ("xx"*20)
 
         for k,v in pair_counts.items():
             assert (v >= 0)
@@ -228,71 +224,80 @@ def tokenize (filepath, gpt2_pat, vocab_size, special_tokens, in_place_update, i
     for special_token in special_tokens:
         vocab[len(vocab)] = special_token.encode("utf-8")
 
-    #print (f"merges = {merges}")
     #merges = [ele[0] for ele in merges.items()] #In case a list is warranted as return. Revisit
 
-    #print (f"vocab = {vocab}")
     return vocab, merges
 
 
+def benchmark (fn, *args):
+    start = time.time()
+    retval = fn (*args)
+    end = time.time()
+    delta = end - start
+    return delta, retval
+
 if __name__ == '__main__':
 
-    filepath = "data/TinyStoriesV2-GPT4-valid.txt"
-    vocab_size = 8000
+    parser = argparse.ArgumentParser(description="Tokenizer")
+    parser.add_argument("--tfile", type=str, default="data/TinyStoriesV2-GPT4-valid.txt", help="input file to tokenize")
+    parser.add_argument("--compare", action="store_true", help="enables comparison of 4 techniques [in-place-updates = True|False, parallelization = True|False]")
+    parser.add_argument("--vocabsize", type=int, default=8000, help="vocab size of the tokenizer used! Power of 64 helps!")
+    parser.add_argument("--inplace", action="store_true", help="in-place updates during merges | unused if compare=True")
+    parser.add_argument("--parallel", action="store_true", help="parallel version of pretokenizer | unused if compare=True")
+    parser.add_argument("--store", action="store_true", help="Whether to store merges and vocabs as merges.pkl and vocab.pkl")
+
+
+    args = parser.parse_args()
+
+    filepath = args.tfile
+    vocab_size = args.vocabsize
+    in_place_update = args.inplace
+    is_parallel = args.parallel
+    is_compare = args.compare
+    is_store = args.store
 
     gpt2_pat = settings.gpt2_pat
     special_tokens = settings.special_tokens
 
-    in_place_update = True
-    is_parallel = True
 
-    #From different tokenizer attempts
-    all_vocabs = []
-    all_merges = []
+    if not is_compare:
+        delta, (vocab, merges) = benchmark (tokenize, filepath, gpt2_pat, 
+                                                        vocab_size, special_tokens, 
+                                                        in_place_update,  is_parallel)
+        print(f"in-place = {in_place_update}  parallel = {is_parallel} took {delta:.4f} seconds")                              
 
-    
-    print (f"Starting in-place = {not in_place_update}  parallel = { is_parallel}")
-    start = time.time()
-    vocab, merges = tokenize (filepath, gpt2_pat, vocab_size, special_tokens, not in_place_update,  is_parallel)
-    end = time.time()
-    all_vocabs.append(vocab)
-    all_merges.append(merges)
-    print(f"in-place = {not in_place_update}  parallel = { is_parallel} took {end - start:.4f} seconds")
+    #Running different comparison methods!
+    else:
+        #Vocabs and merges for different tokenizer attempts
+        all_vocabs = []; all_merges = []
 
-    
-    print (f"Starting in-place = { in_place_update}  parallel = {not is_parallel}")
-    start2 = time.time()
-    vocab2, merges2 = tokenize (filepath, gpt2_pat, vocab_size, special_tokens,  in_place_update, not is_parallel)
-    end2 = time.time()
-    all_vocabs.append(vocab2)
-    all_merges.append(merges2)
-    print(f"in-place = { in_place_update}  parallel = {not is_parallel} took {end2 - start2:.4f} seconds")
-    
-    
-    print (f"Starting in-place = {in_place_update}  parallel = {is_parallel}")
-    start3 = time.time()
-    vocab3, merges3 = tokenize (filepath, gpt2_pat, vocab_size, special_tokens,  in_place_update,  is_parallel)
-    end3 = time.time()
-    all_vocabs.append(vocab3)
-    all_merges.append(merges3)
-    print(f"in-place = { in_place_update}  parallel = { is_parallel} took {end3 - start3:.4f} seconds")
+        #Approach times
+        all_deltas = {}
 
-    print (f"Starting in-place = {not in_place_update}  parallel = {not is_parallel}")
-    start4 = time.time()
-    vocab4, merges4 = tokenize (filepath, gpt2_pat, vocab_size, special_tokens, not in_place_update, not  is_parallel)
-    end4 = time.time()
-    all_vocabs.append(vocab4)
-    all_merges.append(merges4)
-    print(f"in-place = {not in_place_update}  parallel = {not is_parallel} took {end4 - start4:.4f} seconds")
+        in_place_updates = [True, False]
+        is_parallels = [True, False]
 
-    print("--------"*30)
-    
-    #filehandler.serializedWrite(vocab3, "vocab.pkl")
-    #filehandler.serializedWrite(merges3, "merges.pkl")
+        for in_place_update in in_place_updates:
+            for is_parallel in is_parallels:
+                delta, (vocab, merges) = benchmark (tokenize, filepath, gpt2_pat, 
+                                                    vocab_size, special_tokens, 
+                                                    in_place_update,  is_parallel)
+                                                  
+                
+                all_vocabs.append(vocab);all_merges.append(merges); 
+                all_deltas[(in_place_update,  is_parallel)] = delta
+                print("--------"*20)
+        
+        #Print time taken!
+        for (in_place_update, is_parallel),delta in all_deltas.items():
+            print(f"in-place = {in_place_update}  parallel = {is_parallel} took {delta:.4f} seconds")
 
-    #Checks
-    assert len(all_merges) == len(all_vocabs)
-    if len(all_vocabs) > 1:
+        #Checks if the approaches give same o/p!
+        assert len(all_merges) == len(all_vocabs)
         for _vocab1, _vocab2, _merges1, _merges2 in zip(all_vocabs, all_vocabs[1:], all_merges, all_merges[1:]):
             assert (_vocab1 == _vocab2)
             assert (_merges1 == _merges2)
+    
+    if is_store:
+        filehandler.serializedWrite(vocab, "vocab.pkl")
+        filehandler.serializedWrite(merges, "merges.pkl")

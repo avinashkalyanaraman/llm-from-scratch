@@ -1,3 +1,5 @@
+#CS-336 based chunker!
+
 import os
 from typing import BinaryIO
 
@@ -61,5 +63,3 @@ if __name__ == "__main__":
         for start, end in zip(boundaries[:-1], boundaries[1:]):
             f.seek(start)
             chunk = f.read(end - start).decode("utf-8", errors="ignore")
-            
-            # Run pre-tokenization on your chunk and store the counts for each pre-token
