@@ -1,84 +1,67 @@
 # LLM From Scratch
 
-A practical, code-first repository for building language-model systems from core components:
-- tokenization (`tokenizer/`)
-- transformer modeling + training (`transformer/`)
-- RL for reasoning (`rl/`)
+This repository is a code-first workspace for building language model systems from core components. It includes tokenization utilities, transformer training experiments, and reinforcement learning workflows for reasoning tasks.
 
-This repo is organized as an experimentation workspace rather than a single packaged library.
+## Repository Layout
 
-## Repository Structure
+- [`tokenizer/`](tokenizer/): custom byte-pair encoding (BPE) training, GPT-2 tokenization, chunking utilities, and encode/decode helpers.
+- [`transformer/`](transformer/): transformer model implementations, training scripts, inference utilities, and distributed training experiments.
+- [`rl/`](rl/): supervised fine-tuning and reinforcement learning pipelines for reasoning-focused experiments.
 
-### Core directories
-- [`tokenizer/`](tokenizer): byte/BPE tokenizer experiments, custom encoder/decoder, and tiktoken-based tokenization scripts.
-- [`transformer/`](transformer): from-scratch Transformer modules, training/inference scripts, profiling, and distributed training experiments.
-- [`rl/`](rl): RL prerequisites + reasoning-focused SFT/GRPO workflows with vLLM and custom grading.
+## How The Pieces Fit Together
 
+1. [`tokenizer/`](tokenizer/) prepares tokenized corpora and tokenizer artifacts.
+2. [`transformer/`](transformer/) consumes tokenized datasets for model training and evaluation.
+3. [`rl/`](rl/) builds on trained models for post-training and reasoning experiments.
 
+## Tokenizer Workflows
 
-## How The Pieces Connect
+The tokenizer directory currently supports two main paths:
 
-1. `tokenizer/` prepares tokenized data artifacts (`.npy` token id arrays).
-2. `transformer/` trains and evaluates Transformer language models on tokenized corpora.
-3. `rl/reasoning/` runs post-training pipelines:
-   - supervised fine-tuning (`sft/`)
-   - RLVR/GRPO-style updates (`grpo/`)
-   - grading and reward computation (`grader/`)
+- A custom BPE trainer in [`tokenizer/tokenizer.py`](tokenizer/tokenizer.py) with optional parallel pretokenization and optional in-place pair-count updates, and produces `merges and vocab`.
+- A GPT-2 based tokenizer in [`tokenizer/off_the_shelf_tokenizer.py`](tokenizer/off_the_shelf_tokenizer.py) that safely tokenizes large UTF-8 files in binary chunks and writes token IDs to `.npy`.
 
-## Quick Start
-
-### 1) Tokenization
-
-Examples from [`tokenizer/`](tokenizer):
+Example commands:
 
 ```bash
 cd tokenizer
-python off_the_shelf_tokenizer.py --input data/TinyStoriesV2-GPT4-valid.txt --out-npy tiny_valid.npy
-python tokenizer.py
+
+python off_the_shelf_tokenizer.py \
+  --input data/TinyStoriesV2-GPT4-valid.txt \
+  --out-npy tiny_valid.npy \
+  --special "<|endoftext|>" "<|assistant|>" \
+  --print-preview
+
+python tokenizer.py \
+  --tfile data/TinyStoriesV2-GPT4-valid.txt \
+  --vocabsize 8000 \
+  --inplace \
+  --parallel \
+  --store
+
+python tokenizer.py \
+  --tfile data/TinyStoriesV2-GPT4-valid.txt \
+  --vocabsize 2048 \
+  --compare
 ```
 
-### 2) Transformer training/inference
+Outputs produced by the tokenizer workflow include:
 
-Examples from [`transformer/`](transformer):
+- `.npy` token ID arrays for downstream training
+- `vocab.pkl` and `merges.pkl` when `tokenizer.py` is run with `--store`
 
-```bash
-cd transformer
-python train.py --tfile temp/temp.npy --vfile temp/temp.npy
-python test.py --sampling greedy
-```
+Additional details are documented in [`tokenizer/README.md`](tokenizer/README.md).
 
-Distributed experiments:
+## Other Documentation
 
-```bash
-cd transformer/distributed_training
-# see subdirectory README for per-experiment commands
-```
-
-### 3) RL reasoning pipeline
-
-Examples from [`rl/reasoning/`](rl/reasoning):
-
-```bash
-cd rl/reasoning/sft
-python dataset_generator.py
-python train_val_generator.py
-python run.py
-
-cd ../grpo
-python run.py
-```
-
-## Detailed READMEs
-
-- [`tokenizer/`](tokenizer) (key scripts: `tokenizer.py`, `off_the_shelf_tokenizer.py`, `encoder_decoder.py`)
+- [`tokenizer/README.md`](tokenizer/README.md)
 - [`transformer/README.md`](transformer/README.md)
 - [`transformer/distributed_training/README.md`](transformer/distributed_training/README.md)
 - [`rl/README.md`](rl/README.md)
 
 ## Environment Notes
 
-- Python 3.10+ recommended.
-- Most scripts are standalone and rely on local imports, so run them from the directory shown in examples.
-- `rl/reasoning` workflows use `vllm` and are written for CUDA multi-GPU setups (`cuda:0` + `cuda:1`).
-- `transformer/distributed_training` scripts use `torch.multiprocessing.spawn` and fixed localhost process-group settings.
-
+- Python 3.10 or newer is recommended.
+- Most scripts are organized as local modules rather than an installed package, so run commands from the relevant subdirectory.
+- Tokenizer scripts rely on `regex`, `numpy`, and `tiktoken`.
+- Some transformer and RL workflows assume CUDA-capable hardware and a multi-GPU environment.
