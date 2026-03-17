@@ -54,6 +54,80 @@ Outputs produced by the tokenizer workflow include:
 
 Additional details are documented in [`tokenizer/README.md`](tokenizer/README.md).
 
+## Transformer Workflows
+
+The transformer directory contains the model implementation, training loop, inference scripts, and profiling utilities built on top of tokenized `.npy` datasets.
+
+Example commands:
+
+```bash
+cd transformer
+
+python train.py \
+  --tfile temp/temp_train.npy \
+  --vfile temp/temp_valn.npy
+
+python test.py --sampling greedy
+
+#To profile the run
+cd nvtx_runs
+python run.py --tfile ../temp/temp.npy --steps 20
+```
+
+Typical transformer workflow:
+
+- train a language model with [`transformer/train.py`](transformer/train.py) using tokenized `.npy` arrays
+- generate text or inspect checkpoints with [`transformer/test.py`](transformer/test.py)
+- profile execution with [`transformer/nvtx_runs/README.md`](transformer/nvtx_runs/README.md) and [`transformer/timing_comparisons/README.md`](transformer/timing_comparisons/README.md)
+- explore multi-GPU experiments in [`transformer/distributed_training/README.md`](transformer/distributed_training/README.md)
+
+## Reasoning Workflows
+
+The reasoning pipeline under [`rl/reasoning/`](rl/reasoning/) builds on a base model with supervised fine-tuning in `sft/` and reinforcement-learning-style optimization in `grpo/`.
+
+### SFT
+
+The `sft/` workflow prepares math reasoning data, creates train/validation splits, and fine-tunes the policy model.
+
+Example commands:
+
+```bash
+cd rl/reasoning/sft
+
+python dataset_generator.py
+python train_val_generator.py
+python run.py --lr 1e-4 --batchsize 4 --tfile data/sft_train.jsonl --vfile data/sft_valdn.jsonl
+```
+
+Typical `sft/` flow:
+
+- build `sft.jsonl` from the source dataset
+- split it into train and validation JSONL files
+- optionally filter examples with `model_vllm_test.py` and `filter_jsonl.py`
+- train the SFT model and validate it through vLLM-based evaluation
+
+### GRPO
+
+The `grpo/` workflow takes the reasoning setup further with grouped rollouts, reward computation, and policy optimization.
+
+Example commands:
+
+```bash
+cd rl/reasoning/grpo
+
+python run.py
+```
+
+Typical `grpo/` flow:
+
+- load prompts and grouped rollouts
+- score generations with the math grader in `grader/drgrpo_grader.py`
+- compute normalized advantages
+- optimize the policy with `grpo_clip`, `reinforce_with_baseline`, or `no_baseline`
+- sync updated policy weights back into vLLM for the next evaluation cycle
+
+Additional details are documented in [`rl/README.md`](rl/README.md).
+
 ## Other Documentation
 
 - [`tokenizer/README.md`](tokenizer/README.md)
