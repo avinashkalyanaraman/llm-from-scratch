@@ -1,19 +1,19 @@
+in rank 1
+Rank : 1 -- Mean fw pass after warmup of 5 steps= 0.3269552726112306 s
+Rank : 1 -- stdev fw pass after warmup of 5 steps= 0.05832298903854813 s
+Rank : 1 -- Mean bw pass after warmup of 5 steps= 0.2035878024995327 s
+Rank : 1 -- stdev bw pass after warmup of 5 steps= 0.010565955815714326 s
+Rank : 1 -- Mean sync time after warmup of 5 steps= 0.0009904988668859005 s
+Rank : 1 -- stdev synx time warmup of 5 steps= 4.252210782789832e-05 s
+Rank : 1 -- Mean iteration time after warmup of 5 steps= 0.5428458007238806 s
+Rank : 1 -- stdev iteration time warmup of 5 steps= 0.05518906146959406 s
 in rank 0
 total # trainable params in bucketedoverlap model = 148.061952M
-Rank : 0 -- Mean fw pass after warmup of 5 steps= 0.34282188726589086 s
-Rank : 0 -- stdev fw pass after warmup of 5 steps= 0.08386468033876572 s
-Rank : 0 -- Mean bw pass after warmup of 5 steps= 0.21714062562212347 s
-Rank : 0 -- stdev bw pass after warmup of 5 steps= 0.0274085985065354 s
-Rank : 0 -- Mean sync time after warmup of 5 steps= 0.0009855424799025058 s
-Rank : 0 -- stdev synx time warmup of 5 steps= 5.0618114296463016e-05 s
-Rank : 0 -- Mean iteration time after warmup of 5 steps= 0.5724903081730008 s
-Rank : 0 -- stdev iteration time warmup of 5 steps= 0.09322267585964504 s
-in rank 1
-Rank : 1 -- Mean fw pass after warmup of 5 steps= 0.3545953191071749 s
-Rank : 1 -- stdev fw pass after warmup of 5 steps= 0.09101255796001724 s
-Rank : 1 -- Mean bw pass after warmup of 5 steps= 0.2057189667597413 s
-Rank : 1 -- stdev bw pass after warmup of 5 steps= 0.018455549893429866 s
-Rank : 1 -- Mean sync time after warmup of 5 steps= 0.0010094110295176507 s
-Rank : 1 -- stdev synx time warmup of 5 steps= 0.0001274856168434841 s
-Rank : 1 -- Mean iteration time after warmup of 5 steps= 0.572550596948713 s
-Rank : 1 -- stdev iteration time warmup of 5 steps= 0.09280141465178697 s
+Rank : 0 -- Mean fw pass after warmup of 5 steps= 0.3234854891337454 s
+Rank : 0 -- stdev fw pass after warmup of 5 steps= 0.053514128330025786 s
+Rank : 0 -- Mean bw pass after warmup of 5 steps= 0.20708741802722216 s
+Rank : 0 -- stdev bw pass after warmup of 5 steps= 0.017716424632892518 s
+Rank : 0 -- Mean sync time after warmup of 5 steps= 0.0009835015423595905 s
+Rank : 0 -- stdev synx time warmup of 5 steps= 7.904080909008007e-05 s
+Rank : 0 -- Mean iteration time after warmup of 5 steps= 0.5428380501456559 s
+Rank : 0 -- stdev iteration time warmup of 5 steps= 0.05520001397978921 s
