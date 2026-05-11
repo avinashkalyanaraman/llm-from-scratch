@@ -96,12 +96,10 @@ if __name__ == '__main__' :
     parser.add_argument("--dff", type=int, default=-1, help="ffsize")
     parser.add_argument("--vocabsize", type=int, default=50304, help="vocab size of the tokenizer used!")
     
-    parser.add_argument("--tcompile", type=bool, default=False, help="torch compile?")
-    parser.add_argument("--tcore", type=bool, default=False, help="tensor cores?")
-    parser.add_argument("--async_xfer", type=bool, default=False, help="pinned memory + asynced DMA transfer to the GPU?")
-    parser.add_argument("--remove_cpu_syncs", type=bool, default=False, help="Remove CPU syncs (remove bad code) : math.sqrt(), if-blocks")
-    
-
+    parser.add_argument("--tcompile", action="store_true", help="Enable torch.compile",)
+    parser.add_argument("--tcore", action="store_true", help="Enable Tensor Core-friendly settings",)
+    parser.add_argument("--async_xfer", action="store_true", help="Use pinned memory and async DMA transfers to the GPU",)
+    parser.add_argument("--remove_cpu_syncs", action="store_true", help="Remove CPU synchronizations from bad patterns like math.sqrt() and GPU-dependent if-blocks",)
 
     args = parser.parse_args()
 
@@ -169,10 +167,14 @@ if __name__ == '__main__' :
 
     total_num_trainable_params= sum([ele.numel() for ele in model.parameters() if ele.requires_grad])
     print (f"total # trainable params in model = {total_num_trainable_params/1e6}M")
+    
+    assert warmups > 0 , "Atleast 1 warmup"
+    assert warmups <= epochs , "# of warmup steps <= # of epochs"
+    
 
     for epoch in range(epochs):
 
-        print (f"epoch = {epoch}")
+        #print (f"epoch = {epoch}")
 
         sample_input_gpu = sample_input.to(device, non_blocking=isAsyncXfer)
         sample_output_gpu = sample_output.to(device, non_blocking=isAsyncXfer)
