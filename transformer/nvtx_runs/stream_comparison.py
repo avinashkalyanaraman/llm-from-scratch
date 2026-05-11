@@ -119,7 +119,7 @@ if __name__ == '__main__' :
                 group['lr'] = curr_lr
 
             computed_loss.backward() #Computes the gradients                    
-            optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
+            optimizer.gradientClipping (list(model.parameters()), 1) #Clip the gradients
                     
             opt.step() #Updates the weights
 

@@ -134,7 +134,7 @@ if __name__ == '__main__' :
                 computed_loss.backward() #Computes the gradients
                     
             with nvtx.range(f"clip-{num_steps}"):
-                optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
+                optimizer.gradientClipping (list(model.parameters()), 1) #Clip the gradients
             
         
             with nvtx.range(f"optimizer-{num_steps}"):

@@ -195,7 +195,7 @@ if __name__ == '__main__' :
 
 
             computed_loss.backward() #Computes the gradients
-            optimizer.gradientClipping (model.parameters(), 1) #Clip the gradients
+            optimizer.gradientClipping (list(model.parameters()), 1) #Clip the gradients
             opt.step() #Updates the weights
 
             tokens_handled += Y.numel()

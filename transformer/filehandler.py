@@ -25,9 +25,10 @@ class myDatasetInefficient (torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         return (self.x[idx,:], self.y[idx,:])
-    
+'''    
 
 #The more efficient way
+#Leaving it for timing comparisons!
 class myDatasetInefficient2 (torch.utils.data.Dataset):
     def __init__ (self, filepath, context_len=1024):
 
@@ -47,7 +48,6 @@ class myDatasetInefficient2 (torch.utils.data.Dataset):
         return torch.from_numpy(x_val.copy()), torch.from_numpy(y_val.copy())  #DataLoader expects torch.Tensor. This helps!
     
 
-'''
 
 
 #The even more efficient way. It prevents each __getitem__ to hit the disk.

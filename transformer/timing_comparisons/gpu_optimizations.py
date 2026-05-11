@@ -5,8 +5,11 @@ import torch
 import statistics
 
 from transformer_pipeline import Transformer
-import optimizer
+import optimizer, filehandler
 import loss
+
+from torch.utils.data import DataLoader
+
 
 import timeit
 
@@ -39,6 +42,11 @@ def getCrossEntropyLossFromClass (p,q):
     return torch.mean(all_loss)
 
 def slow_gradientClipping (params, max_l2norm, eps = 1e-6):
+
+    #Because we are likely passed an iterator
+    params = [p for p in params if p.grad is not None]
+
+
     l2_norm_sq= sum([(ele.grad**2).sum() for ele in params if ele.grad is not None]) #returns a tensor (1,). 
     import math
     l2_norm = math.sqrt (l2_norm_sq.item()) #Don't use math.sqrt() ; it causes a gpu2cpu transfer
@@ -62,6 +70,10 @@ def slow_gradientClipping (params, max_l2norm, eps = 1e-6):
 
 
 def gradientClipping (params, max_l2norm, eps = 1e-6):
+
+    #Because we are likely passed an iterator
+    params = [p for p in params if p.grad is not None]
+
     l2_norm_sq= sum([(ele.grad**2).sum() for ele in params if ele.grad is not None]) #returns a tensor (1,). 
     #the list before sum() contains references to tensors on gpu. no d2h x-fer
     l2_norm = torch.sqrt (l2_norm_sq) 
@@ -90,16 +102,23 @@ if __name__ == '__main__' :
     parser.add_argument("--heads", type=int, default=12, help="number of heads")
     parser.add_argument("--batchsize", type=int, default=1, help="batchsize")
     parser.add_argument("--num_layers", type=int, default=1, help="num of layers")
-    parser.add_argument("--epochs", type=int, default=2, help="num of epochs[incl. warmups]")
-    parser.add_argument("--warmups", type=int, default=1, help="num of warmup epochs before timing!")
+    parser.add_argument("--num_steps", type=int, default=2, help="num of steps [incl. warmups]")
+    parser.add_argument("--warmups", type=int, default=1, help="num of warmup steps before timing!")
     parser.add_argument("--rope_theta", type=int, default=10000, help="parameter for rope")
     parser.add_argument("--dff", type=int, default=-1, help="ffsize")
     parser.add_argument("--vocabsize", type=int, default=50304, help="vocab size of the tokenizer used!")
+    parser.add_argument("--epochs", type=int, default=1, help="num of epochs")
     
+    #GPU
     parser.add_argument("--tcompile", action="store_true", help="Enable torch.compile",)
     parser.add_argument("--tcore", action="store_true", help="Enable Tensor Core-friendly settings",)
     parser.add_argument("--async_xfer", action="store_true", help="Use pinned memory and async DMA transfers to the GPU",)
     parser.add_argument("--remove_cpu_syncs", action="store_true", help="Remove CPU synchronizations from bad patterns like math.sqrt() and GPU-dependent if-blocks",)
+
+    #Disk
+    parser.add_argument("--tfile", type=str, default="temp/temp.npy", help="file with tokens to be used as training")
+    parser.add_argument("--datacache", action="store_true",  help="whether to use the dataloader cache")
+    parser.add_argument("--shuffle", action="store_true",  help="whether to shuffle in the dataloader")
 
     args = parser.parse_args()
 
@@ -116,11 +135,15 @@ if __name__ == '__main__' :
     isTensorCore = args.tcore
     isAsyncXfer = args.async_xfer
     isRmCPUSyncs = args.remove_cpu_syncs
-    epochs = args.epochs
+    num_steps = args.num_steps
     warmups = args.warmups
+    epochs = args.epochs
     vocab_size = args.vocabsize
     rope_theta = args.rope_theta
     d_ff = args.dff
+    fname = args.tfile
+    datacache = args.datacache
+    isShuffle = args.shuffle
 
     #Identify d_ff
     if d_ff == -1:
@@ -137,8 +160,16 @@ if __name__ == '__main__' :
 
     #Created in the CPU because we want to 'simulate' the effect of
     #reading from disk onto the host memory
-    sample_input = torch.randint ( 0, vocab_size, (batchsize, seqlen), device = 'cpu')
-    sample_output = torch.randint(0, vocab_size, (batchsize, seqlen), device='cpu')
+    #sample_input = torch.randint ( 0, vocab_size, (batchsize, seqlen), device = 'cpu')
+    #sample_output = torch.randint(0, vocab_size, (batchsize, seqlen), device='cpu')
+
+    if datacache:
+        train_dataset = filehandler.myDataset (fname,seqlen)
+    else:
+        train_dataset = filehandler.myDatasetInefficient2 (fname, seqlen)
+
+    train_dataloader = DataLoader (train_dataset, batch_size=batchsize, shuffle=isShuffle, 
+                                   drop_last=True, pin_memory=isAsyncXfer)
 
 
     #Define model and optimizer
@@ -160,53 +191,72 @@ if __name__ == '__main__' :
     if isTorchCompile:
         model = torch.compile(model)
 
-    if isAsyncXfer:
-        sample_input = sample_input.pin_memory()
-        sample_output = sample_output.pin_memory()
+    #if isAsyncXfer:
+    #    sample_input = sample_input.pin_memory()
+    #    sample_output = sample_output.pin_memory()
     
 
     total_num_trainable_params= sum([ele.numel() for ele in model.parameters() if ele.requires_grad])
     print (f"total # trainable params in model = {total_num_trainable_params/1e6}M")
     
     assert warmups > 0 , "Atleast 1 warmup"
-    assert warmups <= epochs , "# of warmup steps <= # of epochs"
+    assert warmups < num_steps , "# of warmup steps < # of steps we want to train!"
     
+    timed = False #Did we time the run? Or were our args so small that we didn't run enough warmups and the training exited!
+    done = False #For the inner loop to signal to the outer loop below that we are done training!
 
+    curr_step_idx = 0
+    
     for epoch in range(epochs):
-
-        #print (f"epoch = {epoch}")
-
-        sample_input_gpu = sample_input.to(device, non_blocking=isAsyncXfer)
-        sample_output_gpu = sample_output.to(device, non_blocking=isAsyncXfer)
-
-        #zero-out gradient
-        optim.zero_grad()
-
-        #Run forward pass
-        y_hat = model(sample_input_gpu)
-        #print (f"{y_hat.shape}")
-
-        loss = getCrossEntropyLossFromClass (sample_output_gpu, y_hat)
-
-        #Run backprop!
-        loss.backward()
-
-        #The two styles of gradient clips to time!
-        if isRmCPUSyncs: #This is a CPU-conditional. no stall!
-            gradientClipping(model.parameters(), 1)
-        else:
-            slow_gradientClipping(model.parameters(), 1)
-
-
-        #Update gradient!
-        optim.step()
-
-        if epoch == warmups - 1:
-            torch.cuda.synchronize()
-            start = timeit.default_timer()
-
     
-    torch.cuda.synchronize()
-    end = timeit.default_timer()
-    runtime = end-start
-    print (f"Total runtime = {runtime:0.2f}s")
+        for batchnum, (X,Y) in enumerate (train_dataloader):             
+
+
+            X = X.to(device, non_blocking=isAsyncXfer)
+            Y = Y.to(device, non_blocking=isAsyncXfer)
+
+            #zero-out gradient
+            optim.zero_grad()
+
+            #Run forward pass
+            y_hat = model(X)
+            #print (f"{y_hat.shape}")
+
+            loss = getCrossEntropyLossFromClass (Y, y_hat)
+
+            #Run backprop!
+            loss.backward()
+
+            #The two styles of gradient clips to time!
+            if isRmCPUSyncs: #This is a CPU-conditional. no stall!
+                gradientClipping(list(model.parameters()), 1)
+            else:
+                slow_gradientClipping(list(model.parameters()), 1)
+
+
+            #Update gradient!
+            optim.step()
+
+
+            if curr_step_idx == warmups - 1:
+                torch.cuda.synchronize()
+                timed = True
+                start = timeit.default_timer()
+
+            curr_step_idx += 1
+
+            if (curr_step_idx >= num_steps): #No more epochs to run. We have trained enough!
+                done = True
+                break
+        
+        if done:
+            break
+
+
+    if timed and curr_step_idx == num_steps: #We have timed as many steps as asked!
+        torch.cuda.synchronize()
+        end = timeit.default_timer()
+        runtime = end-start
+        print (f"Total runtime = {runtime:0.2f}s for {num_steps - warmups} steps")
+    else:
+        print ("Did not have enough steps for timing!")
