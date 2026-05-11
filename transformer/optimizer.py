@@ -47,11 +47,12 @@ def gradientClipping (params, max_l2norm, eps = 1e-6):
             #param.grad.data = param.grad.data * scaling_factor #isn't in-place!
             param.grad.data.mul_(scaling_factor)   #in-place
     '''
-    
+
+    scaling_factor = (max_l2norm/(l2_norm + eps)).clamp(max=1.0) #eliminates the "if" condition
+
     for param in params:
         if param.grad is None:
             continue
-        scaling_factor = (max_l2norm/(l2_norm + eps)).clamp(max=1.0) #eliminates the "if" condition
         param.grad.data.mul_(scaling_factor) #in-place!
 
 
