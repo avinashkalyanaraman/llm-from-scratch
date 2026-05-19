@@ -1,19 +1,11 @@
 import argparse
 import math
-from pathlib import Path
 import statistics
-import sys
 import time
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, Sampler
-
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-sys.path.append(str(SCRIPT_DIR.parent))
-
-import filehandler
 
 
 METHODS = (
@@ -25,7 +17,63 @@ METHODS = (
 )
 
 
+def load_mmap(filepath):
+    try:
+        return np.load(filepath, mmap_mode="r+")
+    except (OSError, PermissionError, ValueError):
+        return np.load(filepath, mmap_mode="r")
+
+
+class CachedMMapDataset(torch.utils.data.Dataset):
+    """Mmap-backed dataset that reuses a cache-window view without copying it."""
+
+    def __init__(self, filepath, context_len=1024, cache_size=10_000_000):
+        self.contents = load_mmap(filepath)
+        self.context_len = context_len
+        self.num_sequences = max(len(self.contents) - context_len, 0)
+        self.cache = None
+        self.cache_size = cache_size
+        self.cachestart = -1
+
+    def __len__(self):
+        return self.num_sequences
+
+    def __getitem__(self, idx):
+        cache_start = (idx // self.cache_size) * self.cache_size
+
+        if cache_start != self.cachestart:
+            cache_end = min(cache_start + self.cache_size + self.context_len, len(self.contents))
+            self.cache = self.contents[cache_start:cache_end]
+            self.cachestart = cache_start
+
+        rel_start = idx % self.cache_size
+        x_val = self.cache[rel_start:rel_start + self.context_len]
+        y_val = self.cache[rel_start + 1:rel_start + 1 + self.context_len]
+
+        return torch.from_numpy(x_val), torch.from_numpy(y_val)
+
+
+class UncachedMMapDataset(torch.utils.data.Dataset):
+    """Mmap-backed dataset with direct per-sample slices and no explicit copy."""
+
+    def __init__(self, filepath, context_len=1024):
+        self.contents = load_mmap(filepath)
+        self.context_len = context_len
+        self.num_sequences = max(len(self.contents) - context_len, 0)
+
+    def __len__(self):
+        return self.num_sequences
+
+    def __getitem__(self, idx):
+        x_val = self.contents[idx:idx + self.context_len]
+        y_val = self.contents[idx + 1:idx + 1 + self.context_len]
+
+        return torch.from_numpy(x_val), torch.from_numpy(y_val)
+
+
 class EagerCachedDataset(torch.utils.data.Dataset):
+    """Mmap-backed dataset that explicitly copies each cache window into RAM."""
+
     def __init__(self, filepath, context_len=1024, cache_size=10_000_000):
         self.contents = np.load(filepath, mmap_mode="r")
         self.context_len = context_len
@@ -150,11 +198,11 @@ def parse_methods(value):
 
 def make_dataset(dataset_kind, args):
     if dataset_kind == "cached":
-        return filehandler.myDataset(args.tfile, args.seqlen, cache_size=args.cache_size)
+        return CachedMMapDataset(args.tfile, args.seqlen, cache_size=args.cache_size)
     if dataset_kind == "copy":
         return EagerCachedDataset(args.tfile, args.seqlen, cache_size=args.cache_size)
     if dataset_kind == "uncached":
-        return filehandler.myDatasetInefficient2(args.tfile, args.seqlen)
+        return UncachedMMapDataset(args.tfile, args.seqlen)
     raise ValueError(f"unknown dataset kind: {dataset_kind}")
 
 
@@ -288,7 +336,7 @@ def main():
     parser.add_argument("--warmups", type=int, default=10, help="unmeasured warmup batches")
     parser.add_argument("--dataset", choices=("cached", "uncached", "both"), default="cached")
     parser.add_argument("--copy", action="store_true", help="also benchmark an eager copy-backed cache")
-    parser.add_argument("--cache_size", type=int, default=10_000_000, help="cache size for filehandler.myDataset")
+    parser.add_argument("--cache_size", type=int, default=10_000_000, help="cache size for cached/copy datasets")
     parser.add_argument("--block_size", type=int, default=None, help="block size in dataset indices; defaults to cache_size")
     parser.add_argument("--num_workers", type=int, default=0, help="DataLoader worker count")
     parser.add_argument("--pin_memory", action="store_true", help="enable pinned-memory collation")
