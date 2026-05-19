@@ -104,7 +104,8 @@ if __name__ == '__main__' :
             Y = Y.to(device, non_blocking=True) 
             
             # Simulate delay on the copy stream (~50 ms)
-            torch.cuda._sleep(int(5e8)) #this is equal to a slow h<->d link or a larger x-fer
+            # 5e7 cycles is often closer to tens of ms; calibrate with CUDA events.
+            torch.cuda._sleep(int(5e7)) #this is equal to a slow h<->d link or a larger x-fer
 
             opt.zero_grad(set_to_none=True) #Faster as : sets each parameter’s .grad to None instead of a tensor of zeros
 
@@ -153,7 +154,8 @@ if __name__ == '__main__' :
             next_Y = host_Y.to(device, non_blocking=True)
 
             # Simulate delay on the copy stream (~50 ms)
-            torch.cuda._sleep(int(5e8)) #this is equal to a slow h<->d link or a larger x-fer
+            # 5e7 cycles is often closer to tens of ms; calibrate with CUDA events.
+            torch.cuda._sleep(int(5e7)) #this is equal to a slow h<->d link or a larger x-fer
 
         while True:
 

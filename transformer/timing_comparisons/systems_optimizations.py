@@ -117,7 +117,7 @@ if __name__ == '__main__' :
 
     #Disk
     parser.add_argument("--tfile", type=str, default="temp/temp.npy", help="file with tokens to be used as training")
-    parser.add_argument("--datacache", action="store_true",  help="whether to use the dataloader cache")
+    parser.add_argument("--datacache", action="store_true",  help="whether to use the dataloader mmap cache")
     parser.add_argument("--shuffle", action="store_true",  help="whether to shuffle in the dataloader")
 
     args = parser.parse_args()
