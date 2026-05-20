@@ -21,6 +21,14 @@ import optimizer
 
 
 D2H_OUTPUT_PATH = "/dev/null"
+D2H_MODES = ("async", "default_stream")
+D2H_MODE_ALIASES = {
+    "both": "both",
+    "stream": "async",
+    "sync": "default_stream",
+    "sequential": "default_stream",
+    "blocking": "default_stream",
+}
 
 
 class UncachedMMapDataset(torch.utils.data.Dataset):
@@ -60,6 +68,14 @@ class BatchSource:
                     return None
                 self.iterator = iter(self.loader)
         return None
+
+
+@dataclass
+class DeviceBatch:
+    x: torch.Tensor
+    y: torch.Tensor
+    host_x: torch.Tensor
+    host_y: torch.Tensor
 
 
 @dataclass
@@ -132,10 +148,17 @@ class AsyncD2HWriter:
 
 
 @dataclass
-class D2HTransferState:
+class AsyncD2HTransferState:
     source: torch.Tensor
     copy_stream: torch.cuda.Stream
     writer: AsyncD2HWriter
+
+
+@dataclass
+class DefaultStreamD2HTransferState:
+    source: torch.Tensor
+    host_tensor: torch.Tensor
+    output_fd: int
 
 
 def write_all(fd, data):
@@ -170,6 +193,18 @@ def parse_size(value):
         return int(float(text) * multipliers[suffix])
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"invalid size: {value!r}") from exc
+
+
+def parse_d2h_modes(value):
+    requested = [mode.strip() for mode in value.split(",") if mode.strip()]
+    if requested == ["both"]:
+        return list(D2H_MODES)
+
+    modes = [D2H_MODE_ALIASES.get(mode, mode) for mode in requested]
+    unknown = sorted(set(modes) - set(D2H_MODES))
+    if unknown:
+        raise argparse.ArgumentTypeError(f"unknown D2H modes: {', '.join(unknown)}")
+    return modes
 
 
 def resolve_dff(d_ff, d_model):
@@ -244,27 +279,42 @@ def required_batch(source, step):
     return batch
 
 
-def move_to_device(host_batch, device):
+def enqueue_to_device(host_batch, device, copy_stream):
     host_x, host_y = host_batch
-    return (
-        host_x.to(device, non_blocking=True),
-        host_y.to(device, non_blocking=True),
-    )
+    with torch.cuda.stream(copy_stream):
+        device_x = host_x.to(device, non_blocking=True)
+        device_y = host_y.to(device, non_blocking=True)
+    return DeviceBatch(device_x, device_y, host_x, host_y)
 
 
-def make_d2h_state(args, device):
+def make_async_d2h_state(args, device):
     if args.d2h_xfer_freq == 0:
         return None
 
     source = torch.zeros(args.tensor_size, dtype=torch.uint8, device=device)
-    return D2HTransferState(
+    return AsyncD2HTransferState(
         source=source,
         copy_stream=torch.cuda.Stream(),
         writer=AsyncD2HWriter(D2H_OUTPUT_PATH),
     )
 
 
-def maybe_enqueue_d2h_copy(state, step, freq):
+def make_default_stream_d2h_state(args, device):
+    if args.d2h_xfer_freq == 0:
+        return None
+
+    source = torch.zeros(args.tensor_size, dtype=torch.uint8, device=device)
+    host_tensor = torch.empty_like(source, device="cpu")
+    output_fd = os.open(D2H_OUTPUT_PATH, os.O_WRONLY)
+    return DefaultStreamD2HTransferState(source, host_tensor, output_fd)
+
+
+def close_default_stream_d2h_state(state):
+    if state is not None:
+        os.close(state.output_fd)
+
+
+def maybe_enqueue_async_d2h_copy(state, step, freq):
     if state is None or (step + 1) % freq != 0:
         return None
 
@@ -286,6 +336,16 @@ def maybe_enqueue_d2h_copy(state, step, freq):
     return pending_copy.num_bytes
 
 
+def maybe_copy_d2h_on_default_stream(state, step, freq):
+    if state is None or (step + 1) % freq != 0:
+        return None
+
+    state.host_tensor.copy_(state.source, non_blocking=False)
+    byte_view = state.host_tensor.numpy().view(np.uint8)
+    write_all(state.output_fd, memoryview(byte_view))
+    return state.host_tensor.numel() * state.host_tensor.element_size()
+
+
 def summarize_runtime(runtime, measured_steps, measured_tokens, measured_d2h_copies, measured_d2h_bytes, batchsize):
     step_ms = 1e3 * runtime / max(measured_steps, 1)
     return {
@@ -301,11 +361,47 @@ def summarize_runtime(runtime, measured_steps, measured_tokens, measured_d2h_cop
     }
 
 
-def benchmark(loader, args, device):
+def make_d2h_state(args, device, d2h_mode):
+    if d2h_mode == "async":
+        return make_async_d2h_state(args, device)
+    if d2h_mode == "default_stream":
+        return make_default_stream_d2h_state(args, device)
+    raise ValueError(f"unknown D2H mode: {d2h_mode}")
+
+
+def maybe_run_d2h_copy(state, step, freq, d2h_mode):
+    if d2h_mode == "async":
+        return maybe_enqueue_async_d2h_copy(state, step, freq)
+    if d2h_mode == "default_stream":
+        return maybe_copy_d2h_on_default_stream(state, step, freq)
+    raise ValueError(f"unknown D2H mode: {d2h_mode}")
+
+
+def close_d2h_state(state, d2h_mode):
+    if state is None:
+        return 0.0
+
+    flush_start = time.perf_counter()
+    if d2h_mode == "async":
+        state.writer.close()
+    elif d2h_mode == "default_stream":
+        close_default_stream_d2h_state(state)
+    else:
+        raise ValueError(f"unknown D2H mode: {d2h_mode}")
+    return time.perf_counter() - flush_start
+
+
+def drain_d2h_warmup(state, d2h_mode):
+    if state is not None and d2h_mode == "async":
+        state.writer.drain()
+
+
+def benchmark(loader, args, device, d2h_mode):
     model, opt = make_model_and_optimizer(args, device)
     source = BatchSource(loader, args.epochs)
-    d2h_state = make_d2h_state(args, device)
+    h2d_copy_stream = torch.cuda.Stream()
     compute_stream = torch.cuda.current_stream()
+    d2h_state = make_d2h_state(args, device, d2h_mode)
 
     start = None
     measured_steps = 0
@@ -314,20 +410,32 @@ def benchmark(loader, args, device):
     measured_d2h_bytes = 0
 
     try:
-        for step in range(args.num_steps):
-            batch = move_to_device(required_batch(source, step), device)
-            train_step(model, opt, batch[0], batch[1])
+        pending = enqueue_to_device(required_batch(source, 0), device, h2d_copy_stream)
 
-            d2h_bytes = maybe_enqueue_d2h_copy(d2h_state, step, args.d2h_xfer_freq)
+        for step in range(args.num_steps):
+            compute_stream.wait_stream(h2d_copy_stream)
+            batch = pending
+            batch.x.record_stream(compute_stream)
+            batch.y.record_stream(compute_stream)
+
+            if step + 1 < args.num_steps and step != args.warmups - 1:
+                pending = enqueue_to_device(required_batch(source, step + 1), device, h2d_copy_stream)
+            else:
+                pending = None
+
+            train_step(model, opt, batch.x, batch.y)
+
+            d2h_bytes = maybe_run_d2h_copy(d2h_state, step, args.d2h_xfer_freq, d2h_mode)
 
             if step == args.warmups - 1:
                 torch.cuda.synchronize()
-                if d2h_state is not None:
-                    d2h_state.writer.drain()
+                drain_d2h_warmup(d2h_state, d2h_mode)
                 start = time.perf_counter()
+                if step + 1 < args.num_steps:
+                    pending = enqueue_to_device(required_batch(source, step + 1), device, h2d_copy_stream)
             elif step >= args.warmups:
                 measured_steps += 1
-                measured_tokens += batch[1].numel()
+                measured_tokens += batch.y.numel()
                 if d2h_bytes is not None:
                     measured_d2h_copies += 1
                     measured_d2h_bytes += d2h_bytes
@@ -343,19 +451,15 @@ def benchmark(loader, args, device):
             args.batchsize,
         )
     finally:
-        if d2h_state is not None:
-            flush_start = time.perf_counter()
-            d2h_state.writer.close()
-            flush_s = time.perf_counter() - flush_start
-        else:
-            flush_s = 0.0
+        flush_s = close_d2h_state(d2h_state, d2h_mode)
 
     result["d2h_flush_s"] = flush_s
     return result
 
 
-def print_result(result):
+def print_result(d2h_mode, result):
     print(
+        f"{d2h_mode:<15} "
         f"{result['measured_steps']:>8d} "
         f"{result['runtime_s']:>10.3f} "
         f"{result['step_ms']:>10.3f} "
@@ -409,6 +513,12 @@ def main():
         default=1,
         help="copy tensor GPU->CPU every N training steps; 0 disables D2H copies",
     )
+    parser.add_argument(
+        "--d2h_modes",
+        type=parse_d2h_modes,
+        default=list(D2H_MODES),
+        help="comma-separated subset of both,async,default_stream",
+    )
     args = parser.parse_args()
 
     if args.warmups <= 0:
@@ -433,12 +543,11 @@ def main():
     dataset = UncachedMMapDataset(args.tfile, args.seqlen)
     if len(dataset) < args.batchsize:
         raise ValueError(f"dataset has {len(dataset)} sequences, fewer than batchsize={args.batchsize}")
-    loader = make_dataloader(dataset, args)
 
     d_ff = resolve_dff(args.dff, args.d_model)
     print(f"file={args.tfile}")
     print(
-        f"dataset=uncached_no_copy shuffle=True pin_memory=True h2d_non_blocking=True "
+        f"dataset=uncached_no_copy shuffle=True pin_memory=True h2d_streaming=True "
         f"tensor_cores=high torch_compile={args.tcompile}"
     )
     print(
@@ -451,19 +560,25 @@ def main():
     )
     print(
         f"d2h_tensor_size={args.tensor_size} bytes d2h_xfer_freq={args.d2h_xfer_freq} "
-        f"d2h_output={D2H_OUTPUT_PATH}"
+        f"d2h_modes={','.join(args.d2h_modes)} d2h_output={D2H_OUTPUT_PATH}"
     )
-    print("Note: measured runtime synchronizes the default compute stream only; d2h_flush_s is the tail drain.")
+    print(
+        "Note: H2D uses a prefetch stream in every row. "
+        "async D2H reports outstanding tail work as d2h_flush_s; "
+        "default_stream D2H copy/write is included in total_s."
+    )
     print()
     print(
-        f"{'steps':>8} {'total_s':>10} {'ms/step':>10} "
+        f"{'d2h_mode':<15} {'steps':>8} {'total_s':>10} {'ms/step':>10} "
         f"{'samples/s':>14} {'tokens/s':>14} "
         f"{'d2h_copies':>10} {'d2h_mb':>12} {'d2h_mb/s':>14} {'d2h_flush_s':>12}"
     )
-    print("-" * 121)
+    print("-" * 137)
 
-    result = benchmark(loader, args, device)
-    print_result(result)
+    for d2h_mode in args.d2h_modes:
+        loader = make_dataloader(dataset, args)
+        result = benchmark(loader, args, device, d2h_mode)
+        print_result(d2h_mode, result)
 
 
 if __name__ == "__main__":
