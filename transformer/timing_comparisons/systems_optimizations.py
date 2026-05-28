@@ -222,10 +222,10 @@ if __name__ == '__main__' :
             y_hat = model(X)
             #print (f"{y_hat.shape}")
 
-            loss = getCrossEntropyLossFromClass (Y, y_hat)
+            _loss = loss.getCrossEntropyLossFromClass (Y, y_hat)
 
             #Run backprop!
-            loss.backward()
+            _loss.backward()
 
             #The two styles of gradient clips to time!
             if isRmCPUSyncs: #This is a CPU-conditional. no stall!
